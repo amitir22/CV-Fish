@@ -169,3 +169,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# .Identifier
+*.Identifier
+
+# Ignore all AVI and JPG files
+*.avi
+*.jpg
+*.fig
+*.jpg
+*.txt
