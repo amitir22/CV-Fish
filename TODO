@@ -1,0 +1,28 @@
+
+0. setup all the hyper parameters in the notebook.ipynb .
+
+1. update video_batch_processor.py to allow the hyper parameters to be injected from ipynb.
+
+2. implement frame-pair processing:
+    a function that receives all the hyper params, and 2 frames, and processing the 2 
+    frames, outputting a few results in FramePairResults class to encapsulate it well.
+
+3. all frame-pairs processing:
+    for each frames window, calculate the movement matrix between the newest frame added, 
+    to each of the other frames in the current window.
+    for each pair, process the movement matrix into a 
+    few output values (average, sum, product, ...) of vector magnitudes
+
+4. add support of super pixel
+
+5. add support of minimal+maximal frame spacings
+
+
+
+list of hyper-parameters to play with and inject:
+- super pixel dimensions: width(int) x height(int)
+- number of frames in frame window (int)
+- number of spacing of frames between comparisons (int)
+  - which means that if 3 is given, then only pairs of frames that are 3 frames 
+    apart at least are considered.
+- capture device, use the cv2.VideoCapture class to inject it.
