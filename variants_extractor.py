@@ -10,7 +10,11 @@ import cv2
 import numpy as np
 from typing import Dict, Any
 
-def compute_optical_flow_variants(frame1: np.ndarray, frame2: np.ndarray) -> Dict[str, Any]:
+# extra frame-pair result functions
+# list of functions with the signature: func(frame1, frame2)->result(int, float, ...)
+# frame_pair_variant_extract_functions = []
+# 
+def compute_optical_flow_variants(frame1: np.ndarray, frame2: np.ndarray, frame_pair_variant_extract_functions) -> Dict[str, Any]:
     """
     Computes multiple optical flow variants (dense and sparse) from two consecutive frames.
     
@@ -86,10 +90,37 @@ def compute_optical_flow_variants(frame1: np.ndarray, frame2: np.ndarray) -> Dic
 
 
 # Example usage (uncomment to run a quick test):
-# if __name__ == "__main__":
+# if __name__ == "__main__":exit
 #     # Load two sample frames here for testing:
 #     # frame1 = cv2.imread("frame1.png")
 #     # frame2 = cv2.imread("frame2.png")
 #     # flows = compute_optical_flow_variants(frame1, frame2)
 #     # print(flows.keys())
 #     pass
+
+"""
+input: Video
+output: mean velocity, velocity magnitude s-deviation + angular s-deviation, timestamp
+
+main experiment:
+input: VideoCapture(), which data to extract from each frame-pair (default = all)
+output: append result data to file, display lucas-kanade results over the original video
+
+cv_params = parameters for the CV functions.
+hyper_params = super_pixel_shape, ...
+def super_function(capture_obj: VideoCapture, cv_params: dict, hyper_params: tuple):
+    for result in results:
+        output_file.append(result)
+    display(results[-1])
+
+
+def display(result):
+    aggregate to super pixels
+    display results graph
+    display angular s-deviation in a clock
+    
+
+benchmark the time overhead of each of the methods.
+scale results with superpixel size.
+
+"""
