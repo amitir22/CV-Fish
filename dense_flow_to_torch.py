@@ -6,15 +6,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-"""
-TODO:
-dense_flow_to_torch.py:
-    1) Reads an .avi video using OpenCV
-    2) Computes dense optical flow (Farneback) for each consecutive frame pair
-    3) Stores all flow fields in a single PyTorch tensor of shape [num_frames-1, 2, H, W].
-    4) Returns or saves the final tensor as needed.
-"""
-
 
 def dense_optical_flow_to_tensor(cap_object: cv.VideoCapture, device='cpu'):
     """
