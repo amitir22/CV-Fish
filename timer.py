@@ -23,3 +23,21 @@ class Timer:
         total_microseconds = total_seconds * 1_000_000 + delta.microseconds
 
         return total_microseconds
+
+
+def test():
+    """
+    Unit test simple function to test this module
+    """
+    timer = Timer()
+    timer.tick()
+    for _ in range(1000000):
+        pass
+    duration = timer.tock()
+    print(duration)
+    duration = timer.tock()
+    print(duration)
+
+
+if __name__ == '__main__':
+    test()
