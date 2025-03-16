@@ -3,6 +3,8 @@
 variants_extractor.py
 """
 
+import csv
+import os
 import cv2
 import numpy as np
 from typing import Dict, Any, Tuple
@@ -86,7 +88,7 @@ def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray,
         flags=flags
     )
 
-    # aggregate result values: magnitude_sum, angular_deviation, magnitude_deviation
+    # aggregate result values: magnitude_mean, angular_deviation, magnitude_deviation
     return calculate_flow_metrics(farneback_flow)
 
 
@@ -107,7 +109,7 @@ def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray):
     tvl1 = cv2.optflow.DualTVL1OpticalFlow_create()
     flow = tvl1.calc(gray1, gray2, None)
 
-    # aggregate result values: magnitude_sum, angular_deviation, magnitude_deviation
+    # aggregate result values: magnitude_mean, angular_deviation, magnitude_deviation
     return calculate_flow_metrics(flow)
 
 
@@ -173,7 +175,7 @@ def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray,
         x_old, y_old = int(old[0]), int(old[1])  # ||
         flow[y_new, x_new] = [x_new - x_old, y_new - y_old]
 
-    # aggregate result values: magnitude_sum, angular_deviation, magnitude_deviation
+    # aggregate result values: magnitude_mean, angular_deviation, magnitude_deviation
     return calculate_flow_metrics(flow)
 
 
@@ -188,32 +190,100 @@ def calculate_flow_metrics(flow: np.ndarray):
     Returns:
         dict: A dictionary containing the magnitude sum, magnitude deviation, and angular deviation.
     """
-    # Separate the horizontal and vertical components of the flow
+    # Separate the horizontal and vertical components of the flow 'W H 2' -> 'W H 1, W H 1'
     dx, dy = flow[..., 0], flow[..., 1]
+
+    x_sum, y_sum = float(np.sum(dx)), float(np.sum(dy))
 
     # Calculate the magnitude and angle of the flow vectors
     magnitude, angle = cv2.cartToPolar(dx, dy)
 
     # Calculate metrics
-    magnitude_sum = np.sum(magnitude)  # Total sum of magnitudes
+    magnitude_mean = np.mean(magnitude)  # Total sum of magnitudes
     magnitude_deviation = np.std(magnitude)  # Standard deviation of magnitudes
     angular_deviation = np.std(angle)  # Standard deviation of angles
+    #_, angular_mean = cv2.cartToPolar([x_sum], [y_sum])[0]
+    angular_mean = np.mean(angle)  # TODO: it's the wrong way to calculate this
 
     return {
-        "magnitude_sum": magnitude_sum,
+        "magnitude_mean": magnitude_mean,
         "magnitude_deviation": magnitude_deviation,
-        "angular_deviation": angular_deviation
+        "angular_deviation": angular_deviation,
+        "angular_mean": angular_mean
     }
 
 
-def extract_variants(frame1: np.ndarray, frame2: np.ndarray, frame_pair_variant_extract_functions: Dict):
+def append_metrics(output_path: str, metrics, time_units):
+     # Make sure all parent directories exist
+    directory = os.path.dirname(output_path)
+    if directory:  # Only try to create if there's an actual directory path
+        os.makedirs(directory, exist_ok=True)
+    
+    # If file doesn't exist, we'll need to write the header
+    file_exists = os.path.exists(output_path)
+    
+    with open(output_path, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        # Write header if this is a new file
+        if not file_exists:
+            writer.writerow(["variant_name",
+                             "time", 
+                             "magnitude_mean", 
+                             "magnitude_deviation", 
+                             "angular_deviation", 
+                             "angular_mean"])
+
+        for variant_name in metrics.keys():
+            # Append the data row
+            writer.writerow([
+                variant_name,
+                time_units,
+                metrics[variant_name]['magnitude_mean'],
+                metrics[variant_name]['magnitude_deviation'],
+                metrics[variant_name]['angular_deviation'],
+                metrics[variant_name]['angular_mean']
+            ])
+
+
+def extract_variants(frame1: np.ndarray, frame2: np.ndarray, variant_extract_functions: Dict):
+    """
+    Extracting variant metrics from the 2 given frames, running all the variant extract fucntions.
+
+    Parameters:
+        frame1 (numpy.ndarray): The 1st frame.
+        frame2 (numpy.ndarray): The 2nd frame.
+        variant_extract_functions (Dict["variant name", Dict["function", "kwargs"]]):
+            a dictionary of the form:
+            {
+                "variant_name1": {
+                    "function": func_name1(frame1, frame2, **kwargs),
+                    "kwargs": {
+                        "arg1_name": arg1_value,
+                        "arg2_name": arg2_value,
+                        ...
+                    }
+                }, 
+                "variant_name2": {
+                    "function": func_name2(frame1, frame2, **kwargs),
+                    "kwargs": {
+                        "arg1_name": arg1_value,
+                        "arg2_name": arg2_value,
+                        ...
+                    }
+                },
+                ...
+            }
+
+    Returns:
+        dict: A dictionary containing the magnitude sum, 
+    """
     variants = dict()
 
-    for key in frame_pair_variant_extract_functions.keys():
-        current_kwargs = frame_pair_variant_extract_functions[key]["kwargs"]
-        current_variant_extract_function = frame_pair_variant_extract_functions[key]["function"]
+    for variant_name in variant_extract_functions.keys():
+        current_variant_extract_function = variant_extract_functions[variant_name]["function"]
+        current_kwargs = variant_extract_functions[variant_name]["kwargs"]
 
-        variants[key] = current_variant_extract_function(frame1, frame2, **current_kwargs)
+        variants[variant_name] = current_variant_extract_function(frame1, frame2, **current_kwargs)
         
     return variants
 
