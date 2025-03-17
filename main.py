@@ -119,7 +119,7 @@ def main():
             output_file_path = f'./output/{output_prefix}_{video_source.split("/")[-1][:15]}_flow_metrics_{output_suffix}.csv'
             append_metrics(output_file_path, metrics, elapsed_t_units)
 
-            # TODO: display updating video and graph
+            # display updating video and graph
             data_dict = {}
 
             for line in variant_extractors.keys():

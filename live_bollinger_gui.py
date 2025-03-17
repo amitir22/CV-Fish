@@ -62,6 +62,8 @@ class MultiBollingerChart:
                       in the right subplot (e.g., a grayscale or RGB image).
                       If None, we don't update the image.
         """
+        # TODO: implement a bollinger clock graph aswell for the angular data
+
         now = time.time()
 
         # 1) Update Bollinger data
