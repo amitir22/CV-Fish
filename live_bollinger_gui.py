@@ -2,18 +2,16 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Enable interactive mode for immediate plot updates
-plt.ion()
+plt.ion()  # interactive mode on
 
 class MultiBollingerChart:
     """
-    A class that manages multiple Bollinger-like lines on a single Matplotlib figure.
-    Each line is identified by a string name. You call push_new_data() with a dictionary:
-        { "LineNameA": (valueA, stdevA),
-          "LineNameB": (valueB, stdevB),
-          ... }
-    Each line is plotted with (value, upper band, lower band) sharing the same color,
-    but the bands use partial transparency for a lighter shade.
+    A class that manages multiple Bollinger-like lines on a single Matplotlib figure
+    AND displays an optional image next to the chart.
+
+    Each time you push_new_data(), you can supply:
+      1) A dictionary of line_name -> (value, stdev) for the Bollinger chart
+      2) An optional np.ndarray image frame to be displayed in the right subplot
 
     The chart only displays data from the last `t_window` seconds on the x-axis.
     """
@@ -26,63 +24,74 @@ class MultiBollingerChart:
         self.t_window = t_window
         self.num_std = num_std
 
-        # Dictionary to store line data for each line_name:
-        #   line_data[line_name] = {
-        #       "times":    [],  # list of float timestamps
-        #       "values":   [],  # list of float
-        #       "stdevs":   [],  # list of float
-        #       "line_val":   <matplotlib.lines.Line2D>,
-        #       "line_upper": <matplotlib.lines.Line2D>,
-        #       "line_lower": <matplotlib.lines.Line2D>
-        #   }
+        # Dictionary storing line data for each line_name
         self.line_data = {}
 
-        # Create figure and axis
-        self.fig, self.ax = plt.subplots()
+        # Create a figure with 2 subplots: left for Bollinger, right for image
+        self.fig, (self.ax, self.ax_img) = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Set up the Bollinger axis
         self.ax.set_xlim(0, self.t_window)
         self.ax.set_xlabel("Time (seconds, recent window)")
         self.ax.set_ylabel("Value (+/- std dev)")
 
-    def push_new_data(self, data_dict: dict[str, tuple[float, float]]):
+        # We'll keep track of an image handle on the right axis
+        # Initialize it to None
+        self.im = None
+        self.ax_img.set_title("Latest Frame")
+        self.ax_img.axis("off")  # Hide axis ticks for the image
+
+    def push_new_data(
+        self, 
+        data_dict: dict[str, tuple[float, float]], 
+        frame: np.ndarray | None = None
+    ):
         """
-        Call this to append new data for one or more lines, by name.
+        Call this to append new data for one or more Bollinger lines and optionally
+        show a new image on the right subplot.
+
         :param data_dict: A dictionary like:
             {
                 "LineA": (valueA, stdA),
                 "LineB": (valueB, stdB),
                 ...
             }
-        Each lineName in data_dict is updated with the provided (value, stdev).
-        If a lineName is new, we'll create new line objects automatically.
-        Then we immediately refresh the figure.
+          Each lineName is updated with the provided (value, stdev).
+          If a lineName is new, we'll create new line objects automatically.
+        :param frame: An optional np.ndarray that will be displayed
+                      in the right subplot (e.g., a grayscale or RGB image).
+                      If None, we don't update the image.
         """
         now = time.time()
 
+        # 1) Update Bollinger data
         for line_name, (val, std) in data_dict.items():
-            # If this line doesn't exist yet, create it
             if line_name not in self.line_data:
                 self._create_line(line_name)
 
-            # Append the new data to this line's lists
             self.line_data[line_name]["times"].append(now)
             self.line_data[line_name]["values"].append(val)
             self.line_data[line_name]["stdevs"].append(std)
 
-        # Update the plot right away
-        self.update_plot()
+        # 2) Update the Bollinger plot
+        self.update_bollinger_plot()
+
+        # 3) If we have a frame, update the image on the right
+        if frame is not None:
+            self.update_image(frame)
+
+        # 4) Redraw
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
     def _create_line(self, line_name: str):
         """
         Internal helper to create a new line (value, upper, lower)
         for a given line_name with a unique color from Matplotlib.
         """
-        # Create the main (value) line, letting Matplotlib pick a color
         line_val, = self.ax.plot([], [], label=f"{line_name} (value)")
-
-        # Get that color so we can reuse it for the bands
         base_color = line_val.get_color()
 
-        # Create upper/lower lines with the same color but more transparent
         line_up, = self.ax.plot([], [], label=f"{line_name} (upper)",
                                 color=base_color, alpha=0.35)
         line_down, = self.ax.plot([], [], label=f"{line_name} (lower)",
@@ -97,64 +106,73 @@ class MultiBollingerChart:
             "line_lower": line_down
         }
 
-        # Update the legend to include these new lines
         self.ax.legend()
 
-    def update_plot(self):
+    def update_bollinger_plot(self):
         """
-        For each line, remove data older than (now - t_window),
-        recalculate (value, upper, lower), and redraw the figure.
+        Removes data older than now - t_window for each line,
+        then updates line data for plotting.
         """
         now = time.time()
 
         for line_name, data in self.line_data.items():
-            # Filter data to keep only points within the last t_window
-            cutoff = now - self.t_window
-
             times_array = np.array(data["times"])
-            values_array = np.array(data["values"])
-            stdevs_array = np.array(data["stdevs"])
+            vals_array = np.array(data["values"])
+            stds_array = np.array(data["stdevs"])
 
+            cutoff = now - self.t_window
             valid_mask = (times_array >= cutoff)
-            times_filtered = times_array[valid_mask]
-            vals_filtered = values_array[valid_mask]
-            stds_filtered = stdevs_array[valid_mask]
 
-            # Replace the original arrays with the filtered ones
+            times_filtered = times_array[valid_mask]
+            vals_filtered = vals_array[valid_mask]
+            stds_filtered = stds_array[valid_mask]
+
+            # Overwrite with the filtered data
             data["times"] = list(times_filtered)
             data["values"] = list(vals_filtered)
             data["stdevs"] = list(stds_filtered)
 
             if len(times_filtered) == 0:
-                # No data left in the time window, clear the lines
+                # No data => clear lines
                 data["line_val"].set_data([], [])
                 data["line_upper"].set_data([], [])
                 data["line_lower"].set_data([], [])
                 continue
 
-            # Convert times to "relative" for the x-axis, so it starts at 0
+            # Convert times to 0..t_window scale
             first_timestamp = times_filtered[0]
             x_values = times_filtered - first_timestamp
 
-            # Bollinger-like lines
-            upper = vals_filtered + (self.num_std * stds_filtered)
-            lower = vals_filtered - (self.num_std * stds_filtered)
+            upper = vals_filtered + self.num_std * stds_filtered
+            lower = vals_filtered - self.num_std * stds_filtered
 
-            # Update each line
             data["line_val"].set_data(x_values, vals_filtered)
             data["line_upper"].set_data(x_values, upper)
             data["line_lower"].set_data(x_values, lower)
 
-        # Ensure x-axis always shows [0..t_window]
+        # Adjust x-axis and y-axis
         self.ax.set_xlim(0, self.t_window)
-
-        # Auto-scale the y-axis
         self.ax.relim()
         self.ax.autoscale_view(scalex=False, scaley=True)
 
-        # Redraw immediately
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+    def update_image(self, frame: np.ndarray):
+        """
+        Displays the given 'frame' (numpy array) in the right subplot.
+        If it's the first time, we create an image handle; otherwise, we update it.
+        """
+        if self.im is None:
+            # Create the image handle the first time
+            # Let imshow infer color map if it's 2D or display as RGB if it's 3D
+            self.im = self.ax_img.imshow(frame)
+        else:
+            # Update the existing image
+            self.im.set_data(frame)
+
+        # Adjust the axis if needed (especially for a first-time shape)
+        self.ax_img.set_title("Latest Frame")
+        self.ax_img.axis("off")  # turn off axis ticks
+        # If you want dynamic color scaling, call 'set_clim' or re-imshow
+        # e.g.: self.im.set_clim(vmin=frame.min(), vmax=frame.max())
 
 
 # ------------------------------------------------------------------------------
@@ -165,21 +183,21 @@ if __name__ == "__main__":
 
     chart = MultiBollingerChart(t_window=10, num_std=2.0)
 
-    # Let's simulate random updates for 3 lines:
-    # "LineA", "LineB", and "LineC"
-    line_names = ["LineA", "LineB", "LineC"]
-
+    line_names = ["LineA", "LineB"]
     for i in range(30):
         data_dict = {}
         for ln in line_names:
-            # e.g., offset the lines slightly to differentiate them
-            offset = {"LineA": 0, "LineB": 15, "LineC": 30}[ln]
+            offset = {"LineA": 0, "LineB": 15}[ln]
             val = 100 + offset + random.gauss(0, 1)
             std = random.uniform(0.5, 2.0)
             data_dict[ln] = (val, std)
 
-        # Send the dictionary to the chart
-        chart.push_new_data(data_dict)
+        # Create a random image frame (e.g., 100x100 grayscale)
+        # You could also have an RGB image (100x100x3).
+        frame = np.random.randint(0, 255, (100, 100)).astype(np.uint8)
+
+        # Push the new Bollinger data + the new image frame
+        chart.push_new_data(data_dict, frame=frame)
 
         time.sleep(0.5)
 

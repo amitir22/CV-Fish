@@ -125,7 +125,7 @@ def main():
             for line in variant_extractors.keys():
                 data_dict[line] = (metrics[line]['magnitude_mean'], metrics[line]['magnitude_deviation'])
             
-            chart.push_new_data(data_dict)
+            chart.push_new_data(data_dict, frame_window[0])
 
             frame_count += 1
 
