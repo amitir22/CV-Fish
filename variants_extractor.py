@@ -97,7 +97,10 @@ def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray,
     )
 
     # aggregate result values: magnitude_mean, angular_deviation, magnitude_deviation
-    return calculate_flow_metrics(farneback_flow)
+    flow_metrics = calculate_flow_metrics(farneback_flow)
+    flow_metrics["flow_matrix"] = farneback_flow
+
+    return flow_metrics
 
 
 def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray):
