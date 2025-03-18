@@ -141,6 +141,9 @@ def main():
             # metrics is now a dictionary of the form: {"varient_name": <metrics dictionary>}
             metrics = process_frame_window(frame_window, variant_extractors)
 
+            # get flow matrix from farneback separately
+            flow = metrics["Farneback"]["flow_matrix"]
+
             # log the metrics with the elapsed units
             output_file_path = f'./output/{output_prefix}_{video_source.split("/")[-1][:15]}_flow_metrics_{output_suffix}.csv'
             append_metrics(output_file_path, metrics, elapsed_t_units)
@@ -151,7 +154,7 @@ def main():
             for line in variant_extractors.keys():
                 data_dict[line] = (metrics[line]['magnitude_mean'], metrics[line]['magnitude_deviation'])
             
-            chart.push_new_data(data_dict, frame_window[0])
+            chart.push_new_data(data_dict, frame_window[0], flow)
 
             frame_count += 1
 
