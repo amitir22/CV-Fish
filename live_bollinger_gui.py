@@ -141,10 +141,15 @@ class MultiBollingerChart:
                 data["line_lower"].set_data([], [])
                 continue
 
-            # Convert times to 0..t_window scale
-            first_timestamp = times_filtered[0]
-            x_values = times_filtered - first_timestamp
+            # # Convert times to 0..t_window scale
+            # first_timestamp = times_filtered[0]
+            # x_values = times_filtered - first_timestamp
 
+            # Instead of subtracting the earliest timestamp, 
+            # align the oldest data to x=0 and newest to x~t_window:
+            offset = now - self.t_window
+            x_values = times_filtered - offset
+        
             upper = vals_filtered + self.num_std * stds_filtered
             lower = vals_filtered - self.num_std * stds_filtered
 

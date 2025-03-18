@@ -1,7 +1,9 @@
 import numpy as np
 import cv2 as cv
+from typing import Tuple
 from collections import deque
 from datetime import datetime
+from time import sleep
 from timer import Timer
 from variants_extractor import DEFAULT_FARNEBACK_PARAMS, DEFAULT_LUCAS_KANADE_PARAMS, DEFAULT_TVL1_PARAMS, \
 extract_farneback_variant, extract_TVL1_variant, extract_lucas_kanade_variant, extract_variants, append_metrics
@@ -10,6 +12,20 @@ import live_bollinger_gui
 
 T_WINDOW = 100
 BOLLINGER_NUM_STD_OF_BANDS = 2.0
+DEFAULT_SUPER_PIXEL_SHAPE = (1, 1)
+
+
+def get_next_frame(video_capture_object: cv.VideoCapture, 
+                   super_pixel_shape: Tuple[int, int]=DEFAULT_SUPER_PIXEL_SHAPE):
+    ret, frame = video_capture_object.read()
+
+    # apply super pixel preprocessing when retrieving frame
+    if ret:
+        frame = cv.resize(frame, (frame.shape[1] // super_pixel_shape[1], 
+                                  frame.shape[0] // super_pixel_shape[0]),
+                                  interpolation=cv.INTER_LINEAR)
+
+    return ret, frame
 
 
 def process_frame_window(frames: deque, variant_extractors):
@@ -49,17 +65,23 @@ def main():
 
     timer_object = Timer()
 
-    super_pixel_dimensions = (2, 2)  # can be modified
+    super_pixel_dimensions = (4, 4)  # can be modified
     frame_window_size = 5
 
     frame_window = deque()  # Init as deque so i can pop left with minimal overhead
 
     for i in range(frame_window_size):
-        ret, frame = video_capture_object.read()  # Read a frame
+        ret, frame = get_next_frame(video_capture_object, super_pixel_dimensions)  # Read a frame
 
         if not ret:
-            print("End of video or error")
-            break
+            if IS_WEBCAM:
+                print("Error: ")
+                # added a sleep(2) here so it won't retry in a short-circuit loop that might
+                # cause the webcam driver to cry
+                sleep(2)
+            else:
+                print("Error: End of video too soon")
+                break
 
         frame_window.append(frame)
 
@@ -95,11 +117,15 @@ def main():
         # TODO: add more variant extractors here
 
         while True:
-            ret, frame = video_capture_object.read()  # Read a frame
+            ret, frame = get_next_frame(video_capture_object, super_pixel_dimensions)  # Read a frame
 
             if not ret:
-                print("End of video or error")
-                break
+                if IS_WEBCAM:
+                    print("Error: ")
+                    # TODO: maybe add a sleep(2) here so it won't retry in a short-circuit loop
+                else: # video source is a file
+                    print("End of video")
+                    break
 
             frame_window.popleft()
             frame_window.append(frame)

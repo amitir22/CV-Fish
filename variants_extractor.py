@@ -35,6 +35,14 @@ DEFAULT_LUCAS_KANADE_PARAMS = frozendict({
 })
 
 
+def get_std_angle(angles, angular_mean):
+    offset = np.pi - angular_mean
+    # TODO: add `offset` to all the angles
+    # TODO: calculate angular_std from np.pi by numerical value
+    # TODO: return angular_std
+    pass
+
+
 def to_gray(frame1: np.ndarray, frame2: np.ndarray):
     """
     Converts the 2 frames to gray-scale.
@@ -140,18 +148,18 @@ def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray,
     """
     gray1, gray2 = to_gray(frame1, frame2)
 
-    # init lucas kanade params
-    lk_params = dict()
-    lk_params['winSize'] = win_size
-    lk_params['maxLevel'] = max_level
-    lk_params['criteria'] = criteria
-
     # init good features to track params
     feature_params = dict()
     feature_params['maxCorners'] = max_corners
     feature_params['qualityLevel'] = quality_level
     feature_params['minDistance'] = min_distance
     feature_params['blockSize'] = block_size
+
+    # init lucas kanade params
+    lk_params = dict()
+    lk_params['winSize'] = win_size
+    lk_params['maxLevel'] = max_level
+    lk_params['criteria'] = criteria
 
     # detect and keep good features
     p0 = cv2.goodFeaturesToTrack(gray1, mask=None, **feature_params)
@@ -173,7 +181,9 @@ def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray,
     for new, old in zip(good_new, good_old):
         x_new, y_new = int(new[0]), int(new[1])  # [0] is x value, [1] is y value
         x_old, y_old = int(old[0]), int(old[1])  # ||
-        flow[y_new, x_new] = [x_new - x_old, y_new - y_old]
+        if (0 <= y_new < frame1.shape[0] and 
+            0 <= x_new < frame1.shape[1]):
+            flow[y_new, x_new] = [x_new - x_old, y_new - y_old]
 
     # aggregate result values: magnitude_mean, angular_deviation, magnitude_deviation
     return calculate_flow_metrics(flow)
@@ -193,7 +203,7 @@ def calculate_flow_metrics(flow: np.ndarray):
     # Separate the horizontal and vertical components of the flow 'W H 2' -> 'W H 1, W H 1'
     dx, dy = flow[..., 0], flow[..., 1]
 
-    x_sum, y_sum = float(np.sum(dx)), float(np.sum(dy))
+    x_sum, y_sum = np.array(float(np.sum(dx))), np.array(float(np.sum(dy)))
 
     # Calculate the magnitude and angle of the flow vectors
     magnitude, angle = cv2.cartToPolar(dx, dy)
@@ -202,8 +212,8 @@ def calculate_flow_metrics(flow: np.ndarray):
     magnitude_mean = np.mean(magnitude)  # Total sum of magnitudes
     magnitude_deviation = np.std(magnitude)  # Standard deviation of magnitudes
     angular_deviation = np.std(angle)  # Standard deviation of angles
-    #_, angular_mean = cv2.cartToPolar([x_sum], [y_sum])[0]
-    angular_mean = np.mean(angle)  # TODO: it's the wrong way to calculate this
+    _, angular_mean = cv2.cartToPolar(x_sum, y_sum)
+    angular_mean = angular_mean[0]
 
     return {
         "magnitude_mean": magnitude_mean,
