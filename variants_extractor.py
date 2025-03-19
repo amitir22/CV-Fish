@@ -19,10 +19,11 @@ DEFAULT_FARNEBACK_PARAMS = frozendict({
     "iterations": 3,
     "poly_n": 5,
     "poly_sigma": 1.2,
-    "flags": 0
+    "flags": 0,
+    "should_apply_gaussian_denoiser": False
 })
 
-DEFAULT_TVL1_PARAMS = frozendict({})
+DEFAULT_TVL1_PARAMS = frozendict({"should_apply_gaussian_denoiser": False})
 
 DEFAULT_LUCAS_KANADE_PARAMS = frozendict({
     "win_size": (15, 15),
@@ -31,7 +32,8 @@ DEFAULT_LUCAS_KANADE_PARAMS = frozendict({
     "max_corners": 100,
     "quality_level": 0.3,
     "min_distance": 7,
-    "block_size": 7
+    "block_size": 7,
+    "should_apply_gaussian_denoiser": False
 })
 
 
@@ -43,7 +45,7 @@ def get_std_angle(angles, angular_mean):
     pass
 
 
-def to_gray(frame1: np.ndarray, frame2: np.ndarray):
+def to_gray(frame1: np.ndarray, frame2: np.ndarray, should_apply_gaussian_denoiser: bool=False):
     """
     Converts the 2 frames to gray-scale.
 
@@ -57,13 +59,18 @@ def to_gray(frame1: np.ndarray, frame2: np.ndarray):
     gray1 =  cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
     gray2 =  cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
+    if (should_apply_gaussian_denoiser):
+        # denoise the grayscale frames:
+        gray1 = cv2.fastNlMeansDenoising(gray1, None, 10, 7, 21)
+        gray2 = cv2.fastNlMeansDenoising(gray2, None, 10, 7, 21)
+
     return gray1, gray2
 
 
 def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray, 
                                 pyr_scale: float, levels: int, winsize: int, 
                                 iterations: int, poly_n: int, poly_sigma: float,
-                                flags: int):
+                                flags: int, should_apply_gaussian_denoiser: bool=False):
     """
     Extracts the farneback variants from the calculated flow between frame1 and frame2.
 
@@ -83,7 +90,7 @@ def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray,
         dict: A dictionary containing the magnitude sum, magnitude deviation, and angular deviation
               of the farneback flow calculation.
     """
-    gray1, gray2 = to_gray(frame1, frame2)
+    gray1, gray2 = to_gray(frame1, frame2, should_apply_gaussian_denoiser)
 
     farneback_flow = cv2.calcOpticalFlowFarneback(
         gray1, gray2, None,
@@ -103,7 +110,7 @@ def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray,
     return flow_metrics
 
 
-def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray):
+def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray, should_apply_gaussian_denoiser: bool=False):
     """
     Extracts the TVL1 variants from the calculated flow between frame1 and frame2.
 
@@ -115,7 +122,7 @@ def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray):
         dict: A dictionary containing the magnitude sum, magnitude deviation, and angular deviation
               of the TVL1 flow calculation.
     """
-    gray1, gray2 = to_gray(frame1, frame2)
+    gray1, gray2 = to_gray(frame1, frame2, should_apply_gaussian_denoiser)
 
     tvl1 = cv2.optflow.DualTVL1OpticalFlow_create()
     flow = tvl1.calc(gray1, gray2, None)
@@ -128,7 +135,7 @@ def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray,
                                     win_size: Tuple[int, int], max_level: int,
                                     criteria: Tuple[int, int, float], max_corners: int,
                                     quality_level: float, min_distance: int, 
-                                    block_size: int):
+                                    block_size: int, should_apply_gaussian_denoiser: bool=False):
     """
     Extracts the lucas kanade variants from the calculated flow between frame1 and frame2.
 
@@ -149,8 +156,8 @@ def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray,
         dict: A dictionary containing the magnitude sum, magnitude deviation, and angular deviation
               of the Lucas-Kanade flow calculation.
     """
-    gray1, gray2 = to_gray(frame1, frame2)
-
+    gray1, gray2 = to_gray(frame1, frame2, should_apply_gaussian_denoiser)
+    
     # init good features to track params
     feature_params = dict()
     feature_params['maxCorners'] = max_corners
