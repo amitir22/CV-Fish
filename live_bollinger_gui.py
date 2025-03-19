@@ -199,6 +199,7 @@ class MultiBollingerChart:
         U = flow[Y, X, 0]
         V = flow[Y, X, 1]
 
+        # TODO: make those values configurable
         # Quiver: Y is row, so invert it if your coordinate system differs.
         # Typically, image coords have Y increasing downward, so we might do -V if we want "up" in the positive direction.
         self.quiver = self.ax_img.quiver(
@@ -208,23 +209,33 @@ class MultiBollingerChart:
             angles='xy',
             scale_units='xy',
 
-            # The 'scale' parameter is critical.
-            # * arrow_length = vector_magnitude / scale
-            # -> Smaller 'scale' => Larger arrows.
-            scale=0.05,  # try 0.01, 0.1, etc. to find a good size
+            # Make arrows bigger (smaller 'scale' => longer arrows)
+            scale=0.05,
 
-            width=0.005,     # thicker arrow shaft
-            headwidth=6,     # bigger arrowhead width
-            headlength=8,    # bigger arrowhead length
-            linewidths=1.0,  # optional: arrow outline thickness
-            edgecolors='black',  # optional: black edges on the arrows
-            alpha=1.0,       # fully opaque
-            zorder=2         # draw arrows on top of the image
+            # Pivot: 'tail' => (X,Y) is at arrow tail; 'mid' => arrow centered on (X,Y);
+            #        'tip' => arrow tip is at (X,Y).
+            pivot='tail',
+
+            # Increase arrow thickness
+            width=0.005,
+
+            # Increase arrowhead size
+            headwidth=10,
+            headlength=12,
+            headaxislength=8,
+
+            # Optional: outline thickness and color
+            linewidths=0.7,  # TODO: make configurable
+            edgecolors='yellow',  # TODO: make configurable
+
+            alpha=1.0,  # fully opaque
+            zorder=2    # drawn above the image
         )
         
         # Make sure the axis matches the image's dimension
         self.ax_img.set_xlim(0, W)
         self.ax_img.set_ylim(H, 0)  # Flip y so 0 is at the top
+
 
 
 # ------------------------------------------------------------------------------
