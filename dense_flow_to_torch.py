@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+This module exists for if/when we will want to convert the dense flow matrix to a tensor 
+that will be fed to some NN model.
+"""
+
 
 import sys
 import cv2 as cv
@@ -7,7 +12,7 @@ import torch
 from tqdm import tqdm
 
 
-def dense_optical_flow_to_tensor(cap_object: cv.VideoCapture, device='cpu'):
+def dense_optical_flow_to_tensor(cap_object: cv.VideoCapture, device='cpu', frame_window_size=5):
     """
     Compute dense optical flow for consecutive frames of a given video file
     and store them in a single PyTorch tensor.
@@ -69,8 +74,8 @@ def dense_optical_flow_to_tensor(cap_object: cv.VideoCapture, device='cpu'):
         prev_gray = next_gray
         frame_index += 1
 
-        # TODO: DELETE
-        if frame_index == 200:
+        # End the processing when
+        if frame_index == frame_window_size:
             break
 
         # Update progress bar
