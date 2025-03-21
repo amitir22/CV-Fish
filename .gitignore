@@ -180,6 +180,9 @@ cython_debug/
 *.jpg
 *.txt
 
+VS code:
+.vscode/*
+
 # Custom ignores:
 *.pt
 output/*
