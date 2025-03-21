@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import cv_fish_configuration as conf
 
 plt.ion()  # Interactive mode to update plots without blocking
 
@@ -199,7 +200,6 @@ class MultiBollingerChart:
         U = flow[Y, X, 0]
         V = flow[Y, X, 1]
 
-        # TODO: make those values configurable
         # Quiver: Y is row, so invert it if your coordinate system differs.
         # Typically, image coords have Y increasing downward, so we might do -V if we want "up" in the positive direction.
         self.quiver = self.ax_img.quiver(
@@ -225,8 +225,8 @@ class MultiBollingerChart:
             headaxislength=8,
 
             # Optional: outline thickness and color
-            linewidths=0.7,  # TODO: make configurable
-            edgecolors='yellow',  # TODO: make configurable
+            linewidths=0.7,
+            edgecolors='yellow', 
 
             alpha=1.0,  # fully opaque
             zorder=2    # drawn above the image
@@ -235,7 +235,6 @@ class MultiBollingerChart:
         # Make sure the axis matches the image's dimension
         self.ax_img.set_xlim(0, W)
         self.ax_img.set_ylim(H, 0)  # Flip y so 0 is at the top
-
 
 
 # ------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-variants_extractor.py
+metrics_extractor.py
 """
 
 import csv
@@ -8,34 +8,7 @@ import os
 import cv2
 import numpy as np
 from typing import Dict, Any, Tuple
-from frozendict import frozendict
-
-# NOTE: if you want to edit the params, edit their copy with:
-#       >>> editable_params = dict(DEFAULT_<*>_PARAMS)
-DEFAULT_FARNEBACK_PARAMS = frozendict({
-    "pyr_scale": 0.5,
-    "levels": 3,
-    "winsize": 15,
-    "iterations": 3,
-    "poly_n": 5,
-    "poly_sigma": 1.2,
-    "flags": 0,
-    "should_apply_gaussian_denoiser": False
-})
-
-DEFAULT_TVL1_PARAMS = frozendict({"should_apply_gaussian_denoiser": False})
-
-DEFAULT_LUCAS_KANADE_PARAMS = frozendict({
-    "win_size": (15, 15),
-    "max_level": 2,
-    "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
-    "max_corners": 100,
-    "quality_level": 0.3,
-    "min_distance": 7,
-    "block_size": 7,
-    "should_apply_gaussian_denoiser": False
-})
-
+import cv_fish_configuration as conf
 
 def get_std_angle(angles, angular_mean):
     offset = np.pi - angular_mean
@@ -67,12 +40,12 @@ def to_gray(frame1: np.ndarray, frame2: np.ndarray, should_apply_gaussian_denois
     return gray1, gray2
 
 
-def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray, 
+def extract_farneback_metric(frame1: np.ndarray, frame2: np.ndarray, 
                                 pyr_scale: float, levels: int, winsize: int, 
                                 iterations: int, poly_n: int, poly_sigma: float,
                                 flags: int, should_apply_gaussian_denoiser: bool=False):
     """
-    Extracts the farneback variants from the calculated flow between frame1 and frame2.
+    Extracts the farneback metrics from the calculated flow between frame1 and frame2.
 
     Parameters:
         frame1 (numpy.ndarray): The first (non-gray scale) frame.
@@ -110,9 +83,9 @@ def extract_farneback_variant(frame1: np.ndarray, frame2: np.ndarray,
     return flow_metrics
 
 
-def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray, should_apply_gaussian_denoiser: bool=False):
+def extract_TVL1_metric(frame1: np.ndarray, frame2: np.ndarray, should_apply_gaussian_denoiser: bool=False):
     """
-    Extracts the TVL1 variants from the calculated flow between frame1 and frame2.
+    Extracts the TVL1 metrics from the calculated flow between frame1 and frame2.
 
     Parameters:
         frame1 (numpy.ndarray): The first (non-gray scale) frame.
@@ -131,13 +104,13 @@ def extract_TVL1_variant(frame1: np.ndarray, frame2: np.ndarray, should_apply_ga
     return calculate_flow_metrics(flow)
 
 
-def extract_lucas_kanade_variant(frame1: np.ndarray, frame2: np.ndarray, 
+def extract_lucas_kanade_metric(frame1: np.ndarray, frame2: np.ndarray, 
                                     win_size: Tuple[int, int], max_level: int,
                                     criteria: Tuple[int, int, float], max_corners: int,
                                     quality_level: float, min_distance: int, 
                                     block_size: int, should_apply_gaussian_denoiser: bool=False):
     """
-    Extracts the lucas kanade variants from the calculated flow between frame1 and frame2.
+    Extracts the lucas kanade metrics from the calculated flow between frame1 and frame2.
 
     Parameters:
         frame1 (numpy.ndarray): The first (non-gray scale) frame.
@@ -246,36 +219,36 @@ def append_metrics(output_path: str, metrics, time_units):
         writer = csv.writer(file)
         # Write header if this is a new file
         if not file_exists:
-            writer.writerow(["variant_name",
+            writer.writerow(["metric_name",
                              "time", 
                              "magnitude_mean", 
                              "magnitude_deviation", 
                              "angular_deviation", 
                              "angular_mean"])
 
-        for variant_name in metrics.keys():
+        for metric_name in metrics.keys():
             # Append the data row
             writer.writerow([
-                variant_name,
+                metric_name,
                 time_units,
-                metrics[variant_name]['magnitude_mean'],
-                metrics[variant_name]['magnitude_deviation'],
-                metrics[variant_name]['angular_deviation'],
-                metrics[variant_name]['angular_mean']
+                metrics[metric_name]['magnitude_mean'],
+                metrics[metric_name]['magnitude_deviation'],
+                metrics[metric_name]['angular_deviation'],
+                metrics[metric_name]['angular_mean']
             ])
 
 
-def extract_variants(frame1: np.ndarray, frame2: np.ndarray, variant_extract_functions: Dict):
+def extract_metrics(frame1: np.ndarray, frame2: np.ndarray, metric_extract_functions: Dict):
     """
-    Extracting variant metrics from the 2 given frames, running all the variant extract fucntions.
+    Extracting metric metrics from the 2 given frames, running all the metric extract fucntions.
 
     Parameters:
         frame1 (numpy.ndarray): The 1st frame.
         frame2 (numpy.ndarray): The 2nd frame.
-        variant_extract_functions (Dict["variant name", Dict["function", "kwargs"]]):
+        metric_extract_functions (Dict["metric name", Dict["function", "kwargs"]]):
             a dictionary of the form:
             {
-                "variant_name1": {
+                "metric_name1": {
                     "function": func_name1(frame1, frame2, **kwargs),
                     "kwargs": {
                         "arg1_name": arg1_value,
@@ -283,7 +256,7 @@ def extract_variants(frame1: np.ndarray, frame2: np.ndarray, variant_extract_fun
                         ...
                     }
                 }, 
-                "variant_name2": {
+                "metric_name2": {
                     "function": func_name2(frame1, frame2, **kwargs),
                     "kwargs": {
                         "arg1_name": arg1_value,
@@ -297,15 +270,15 @@ def extract_variants(frame1: np.ndarray, frame2: np.ndarray, variant_extract_fun
     Returns:
         dict: A dictionary containing the magnitude sum, 
     """
-    variants = dict()
+    metrics = dict()
 
-    for variant_name in variant_extract_functions.keys():
-        current_variant_extract_function = variant_extract_functions[variant_name]["function"]
-        current_kwargs = variant_extract_functions[variant_name]["kwargs"]
+    for metric_name in metric_extract_functions.keys():
+        current_metric_extract_function = metric_extract_functions[metric_name]["function"]
+        current_kwargs = metric_extract_functions[metric_name]["kwargs"]
 
-        variants[variant_name] = current_variant_extract_function(frame1, frame2, **current_kwargs)
+        metrics[metric_name] = current_metric_extract_function(frame1, frame2, **current_kwargs)
         
-    return variants
+    return metrics
 
 
 """
