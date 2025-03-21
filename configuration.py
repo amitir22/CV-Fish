@@ -1,1 +1,0 @@
-# TODO: store configurations as frozen immutable objects when possible
