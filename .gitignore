@@ -186,3 +186,4 @@ VS code:
 # Custom ignores:
 *.pt
 output/*
+*.zip
