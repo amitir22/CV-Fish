@@ -1,0 +1,33 @@
+# environment.yml — create with:  mamba env create -f environment.yml
+name: cv-fish
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # Core runtime
+  - python=3.9
+  - pip
+
+  # Numerics & science
+  - numpy
+  - scipy
+  - pandas
+  - scikit-learn
+  - mpi4py
+
+  # Computer-vision helpers
+  - opencv
+  - pillow
+
+  # Plotting / progress
+  - matplotlib
+  - tqdm
+
+  # Project-specific utilities
+  - frozendict
+  - blobfile
+  - spectral
+
+  # Interactive work
+  - ipython
+
