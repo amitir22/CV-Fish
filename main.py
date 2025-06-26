@@ -11,6 +11,21 @@ from metrics_extractor import extract_farneback_metric, extract_TVL1_metric, \
 import live_bollinger_gui
 import cv_fish_configuration as conf
 
+VIDOE_FILE_PATH = './Workable Data/Processed/DPH21_Above_IR10.avi'
+
+# TODO: fill the correct data
+NVR_USER = 'admin'
+NVR_PASS = 'admin12345'
+NVR_IP = '0.0.0.0'  # within network
+NVR_PORT = '554'  # default port for the protocol, might not need change
+NVR_PATH = '/Streaming/Channels/101'
+
+VIDEO_SOURCE = {
+    'FILE': VIDOE_FILE_PATH,
+    'WEBCAM': 0,
+    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
+}
+
 
 def get_next_frame(video_capture_object: cv.VideoCapture, 
                    super_pixel_shape: Tuple[int, int]=conf.DEFAULT_SUPER_PIXEL_SHAPE):
@@ -49,12 +64,15 @@ def main():
     # if len(sys.argv) > 1:
     #     is_webcam = False
     is_webcam = False
+    is_nvr = True
 
     if is_webcam:
-        video_source = 0
+        video_source = VIDEO_SOURCE["WEBCAM"]
+    elif is_nvr:
+        video_source = VIDEO_SOURCE["NVR"]
     else:  # video source is a video file
         # video_source = sys.argv[1]
-        video_source = './Workable Data/Processed/DPH21_Above_IR10.avi'
+        video_source = VIDEO_SOURCE["FILE"]
         
     video_capture_object = cv.VideoCapture(video_source)
 
