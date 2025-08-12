@@ -79,5 +79,6 @@ T_WINDOW: Final[int] = 100
 BOLLINGER_NUM_STD_OF_BANDS: Final[float] = 2.0
 DEFAULT_SUPER_PIXEL_SHAPE: Final[Tuple[int, int]] = (1, 1)
 WEBCAM_RETRY_INTERVAL_SECONDS: Final[int] = 2  # The frame polling interval when failing to retrieve a frame
-FRAME_WINDOW_SIZE: Final[int] = 2  # The spacing of frames between each flow calculation
+FRAME_WINDOW_SIZE: Final[int] = 5  # Number of frames captured each interval
+CAPTURE_INTERVAL_MINUTES: Final[int] = 10  # Interval between capture sessions
 DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)

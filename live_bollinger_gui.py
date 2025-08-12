@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.widgets import RadioButtons
 import cv_fish_configuration as conf
 
 plt.ion()  # Interactive mode to update plots without blocking
@@ -34,6 +35,13 @@ class MultiBollingerChart:
         self.ax_boll.set_xlim(0, self.t_window)
         self.ax_boll.set_xlabel("Time (seconds, recent window)")
         self.ax_boll.set_ylabel("Value (+/- std dev)")
+
+        # Dropdown for selecting frame pair
+        pair_ax = self.fig.add_axes([0.8, 0.8, 0.15, 0.15])
+        self.pair_selector = RadioButtons(pair_ax, ["1-2", "1-3", "1-4", "1-5"])
+        self.active_pair = "1-2"
+        self.pair_selector.on_clicked(self._on_pair_selected)
+        self.pair_to_lines = {}
 
         # For the image + flow overlay
         self.im = None              # Will be a handle to the displayed image
@@ -91,13 +99,15 @@ class MultiBollingerChart:
         Internal helper to create a new line (value, upper, lower)
         for a given line_name with a unique color from Matplotlib.
         """
-        line_val, = self.ax_boll.plot([], [], label=f"{line_name} (value)")
+        pair_name, metric_label = line_name.split(":", 1)
+
+        line_val, = self.ax_boll.plot([], [], label=f"{metric_label} (value)", visible=pair_name==self.active_pair)
         base_color = line_val.get_color()
 
-        line_up, = self.ax_boll.plot([], [], label=f"{line_name} (upper)",
-                                     color=base_color, alpha=0.35)
-        line_down, = self.ax_boll.plot([], [], label=f"{line_name} (lower)",
-                                       color=base_color, alpha=0.35)
+        line_up, = self.ax_boll.plot([], [], label=f"{metric_label} (upper)",
+                                     color=base_color, alpha=0.35, visible=pair_name==self.active_pair)
+        line_down, = self.ax_boll.plot([], [], label=f"{metric_label} (lower)",
+                                       color=base_color, alpha=0.35, visible=pair_name==self.active_pair)
 
         self.line_data[line_name] = {
             "times": [],
@@ -108,7 +118,17 @@ class MultiBollingerChart:
             "line_lower": line_down
         }
 
+        self.pair_to_lines.setdefault(pair_name, []).extend([line_val, line_up, line_down])
         self.ax_boll.legend()
+
+    def _on_pair_selected(self, label):
+        self.active_pair = label
+        for pair, lines in self.pair_to_lines.items():
+            vis = pair == self.active_pair
+            for ln in lines:
+                ln.set_visible(vis)
+        self.ax_boll.legend()
+        self.fig.canvas.draw_idle()
 
     def _update_bollinger_plot(self):
         """
