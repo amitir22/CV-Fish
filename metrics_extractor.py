@@ -206,30 +206,31 @@ def calculate_flow_metrics(flow: np.ndarray):
     }
 
 
-def append_metrics(output_path: str, metrics, time_units):
+def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
      # Make sure all parent directories exist
     directory = os.path.dirname(output_path)
     if directory:  # Only try to create if there's an actual directory path
         os.makedirs(directory, exist_ok=True)
-    
+
     # If file doesn't exist, we'll need to write the header
     file_exists = os.path.exists(output_path)
-    
+
     with open(output_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         # Write header if this is a new file
         if not file_exists:
             writer.writerow(["metric_name",
-                             "time", 
-                             "magnitude_mean", 
-                             "magnitude_deviation", 
-                             "angular_deviation", 
+                             "time",
+                             "magnitude_mean",
+                             "magnitude_deviation",
+                             "angular_deviation",
                              "angular_mean"])
 
         for metric_name in metrics.keys():
             # Append the data row
+            name = f"{pair_name}_{metric_name}" if pair_name else metric_name
             writer.writerow([
-                metric_name,
+                name,
                 time_units,
                 metrics[metric_name]['magnitude_mean'],
                 metrics[metric_name]['magnitude_deviation'],
