@@ -104,10 +104,11 @@ def main():
             append_metrics(output_file_path, metrics, time_stamp, pair_label)
 
             data_dict = {
-                "Farneback_magnitude_mean": (
-                    metrics["Farneback"]["magnitude_mean"],
-                    metrics["Farneback"]["magnitude_deviation"],
+                algo: (
+                    metrics[algo]["magnitude_mean"],
+                    metrics[algo]["magnitude_deviation"],
                 )
+                for algo in metric_extractors.keys()
             }
             flow = metrics["Farneback"].get("flow_matrix")
             chart.push_new_data(data_dict, frame=frames[0], flow=flow, pair_name=pair_label)

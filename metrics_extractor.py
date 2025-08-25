@@ -223,7 +223,7 @@ def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
 
     If the file does not yet exist it will be created along with its
     parent directories and a header row.  Metrics are written in the
-    format ``metric_name,time,magnitude_mean,magnitude_deviation,
+    format ``pair,metric_name,time,magnitude_mean,magnitude_deviation,
     angular_deviation,angular_mean``.
 
     Parameters
@@ -236,8 +236,8 @@ def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
     time_units:
         Time label to write for each row.  For example an ISO timestamp.
     pair_name:
-        Optional prefix added to the metric name to identify which frame
-        pair produced the measurement.
+        Label identifying which frame pair produced the measurement,
+        e.g. ``"1-2"``.
     """
     # Make sure all parent directories exist
     directory = os.path.dirname(output_path)
@@ -251,23 +251,26 @@ def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
         writer = csv.writer(file)
         # Write header if this is a new file
         if not file_exists:
-            writer.writerow(["metric_name",
-                             "time",
-                             "magnitude_mean",
-                             "magnitude_deviation",
-                             "angular_deviation",
-                             "angular_mean"])
+            writer.writerow([
+                "pair",
+                "metric_name",
+                "time",
+                "magnitude_mean",
+                "magnitude_deviation",
+                "angular_deviation",
+                "angular_mean",
+            ])
 
         for metric_name in metrics.keys():
             # Append the data row
-            name = f"{pair_name}_{metric_name}" if pair_name else metric_name
             writer.writerow([
-                name,
+                pair_name,
+                metric_name,
                 time_units,
                 metrics[metric_name]['magnitude_mean'],
                 metrics[metric_name]['magnitude_deviation'],
                 metrics[metric_name]['angular_deviation'],
-                metrics[metric_name]['angular_mean']
+                metrics[metric_name]['angular_mean'],
             ])
 
 

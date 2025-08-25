@@ -100,7 +100,7 @@ def _metrics_loop(stop_event: threading.Event):
 
     while not stop_event.is_set():
         frames = _capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
-        if len(frames) < 2:
+        if len(frames) < conf.FRAME_WINDOW_SIZE:
             stop_event.wait(capture_interval)
             continue
 
@@ -109,11 +109,13 @@ def _metrics_loop(stop_event: threading.Event):
         output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
         time_stamp = now.isoformat()
 
-        metrics = extract_metrics(frames[0], frames[1], metric_extractors)
-        append_metrics(output_file_path, metrics, time_stamp, '1-2')
-
-        flow = metrics['Farneback'].get('flow_matrix')
-        _save_latest_frame(frames[0], flow, time_stamp)
+        for idx in range(1, conf.FRAME_WINDOW_SIZE):
+            metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
+            pair_label = f'1-{idx+1}'
+            append_metrics(output_file_path, metrics, time_stamp, pair_label)
+            if idx == 1:
+                flow = metrics['Farneback'].get('flow_matrix')
+                _save_latest_frame(frames[0], flow, time_stamp)
 
         stop_event.wait(capture_interval)
 
