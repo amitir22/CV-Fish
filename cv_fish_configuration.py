@@ -134,7 +134,9 @@ FRAMES_DIR: Final[str] = os.path.join(OUTPUT_DIR, "frames")
 VIDOE_FILE_PATH: Final[str] = './Workable Data/Processed/DPH21_Above_IR10.avi'
 NVR_USER: Final[str] = 'admin'
 NVR_PASS: Final[str] = 'admin12345'
-NVR_IP: Final[str] = '0.0.0.0'  # within network
+# IP of the network video recorder. Override via the NVR_IP environment
+# variable if necessary.
+NVR_IP: Final[str] = os.getenv('NVR_IP', '192.168.1.56')
 NVR_PORT: Final[str] = '554'  # default port for the protocol, might not need change
 NVR_PATH: Final[str] = '/Streaming/Channels/101'
 VIDEO_SOURCE = frozendict({
