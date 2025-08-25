@@ -136,7 +136,7 @@ def _metrics_loop(stop_event: threading.Event):
         now = datetime.now()
         date_str = now.strftime('%Y%m%d')
         output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
-        time_stamp = now.strftime('%Y%m%d-%H%M')
+        time_stamp = now.strftime(conf.TIMESTAMP_FORMAT)
 
         flows = []
         for idx in range(1, conf.FRAME_WINDOW_SIZE):

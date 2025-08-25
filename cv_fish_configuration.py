@@ -110,13 +110,16 @@ CAPTURE_INTERVAL_MINUTES: Final[int] = 10
 DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)
 """Default dimensions used when downscaling frames for processing."""
 
+# Timestamp format used for metric rows and frame filenames
+TIMESTAMP_FORMAT: Final[str] = "%Y%m%d-%H%M%S"
+
 
 # =============================================================================
 # I/O paths and outputs:
 # =============================================================================
 OUTPUT_DIR: Final[str] = "./output"
 # Latest frame saved by the metrics worker; stored as PNG to align with
-# persistent frame-window naming (frame<idx>-YYYYMMDD-hhmm.png)
+# persistent frame-window naming (frame<idx>-YYYYMMDD-hhmmss.png)
 LATEST_FRAME_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame.png")
 LATEST_TS_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame_timestamp.txt")
 FRAMES_DIR: Final[str] = os.path.join(OUTPUT_DIR, "frames")

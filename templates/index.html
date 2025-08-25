@@ -78,7 +78,7 @@
     }
 
     async function fetchFrame() {
-      const res = await fetch('/frame?' + Date.now(), {cache: 'no-store'});
+      const res = await fetch('/frame', {cache: 'no-store'});
       if (!res.ok || res.status === 204) return;
       const blob = await res.blob();
       document.getElementById('latestFrame').src = URL.createObjectURL(blob);
