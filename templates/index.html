@@ -75,8 +75,10 @@
     }
 
     async function fetchFrame() {
-      const img = document.getElementById('latestFrame');
-      img.src = '/frame?' + Date.now();
+      const res = await fetch('/frame?' + Date.now(), {cache: 'no-store'});
+      if (!res.ok || res.status === 204) return;
+      const blob = await res.blob();
+      document.getElementById('latestFrame').src = URL.createObjectURL(blob);
     }
 
     chart.canvas.addEventListener('mousemove', async (evt) => {

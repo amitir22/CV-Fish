@@ -39,11 +39,17 @@ def get_all_metrics():
     return jsonify({'timestamp': ts, 'metrics': rows})
 
 
+@app.get('/favicon.ico')
+def favicon():
+    """Avoid unnecessary 404 errors for the browser favicon request."""
+    return ('', 204)
+
+
 @app.get('/frame')
 def get_last_frame():
     """Return the most recently saved frame with optical-flow quivers."""
     if not os.path.exists(conf.LATEST_FRAME_PATH):
-        return ('', 404)
+        return ('', 204)
     ts = ''
     if os.path.exists(conf.LATEST_TS_PATH):
         with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
