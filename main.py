@@ -83,6 +83,25 @@ def list_frame_sets():
     return jsonify({'timestamps': timestamps})
 
 
+@app.get('/frames/all')
+def list_all_frames():
+    """Return all frame filenames grouped by their capture timestamp."""
+    pattern = os.path.join(conf.FRAMES_DIR, 'frame*-*.png')
+    files = sorted(glob.glob(pattern))
+    grouped: dict[str, list[dict[str, int | str]]] = {}
+    for path in files:
+        base = os.path.basename(path)
+        idx_part, ts_part = base.split('-', 1)
+        ts = ts_part.rsplit('.', 1)[0]
+        idx = int(idx_part.replace('frame', ''))
+        grouped.setdefault(ts, []).append({'index': idx, 'filename': base})
+    frame_sets = [
+        {'timestamp': ts, 'frames': sorted(frames, key=lambda f: f['index'])}
+        for ts, frames in sorted(grouped.items())
+    ]
+    return jsonify({'frame_sets': frame_sets})
+
+
 @app.get('/frames/<timestamp>')
 def list_frames(timestamp: str):
     """List frame indices available for a given capture timestamp."""

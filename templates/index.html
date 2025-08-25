@@ -38,6 +38,7 @@
       options: {animation: false, plugins: {title: {display: true, text: ''}}}
     });
     const frameWindow = document.getElementById('frameWindow');
+    const frameCache = {};
     let hoverTs = null;
 
     metricSelect.addEventListener('change', () => {
@@ -72,6 +73,7 @@
       data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
       data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
       chart.update();
+      await preloadFrames();
     }
 
     async function fetchFrame() {
@@ -81,20 +83,37 @@
       document.getElementById('latestFrame').src = URL.createObjectURL(blob);
     }
 
-    chart.canvas.addEventListener('mousemove', async (evt) => {
+    async function preloadFrames() {
+      const res = await fetch('/frames/all');
+      if (!res.ok) return;
+      const json = await res.json();
+      for (const set of json.frame_sets) {
+        if (!data.labels.includes(set.timestamp)) continue;
+        if (frameCache[set.timestamp]) continue;
+        frameCache[set.timestamp] = [];
+        for (const f of set.frames) {
+          if (f.index === 1) continue;
+          const imgRes = await fetch(`/frames/${set.timestamp}/${f.index}`);
+          if (!imgRes.ok) continue;
+          const blob = await imgRes.blob();
+          frameCache[set.timestamp].push({index: f.index, url: URL.createObjectURL(blob), filename: f.filename});
+        }
+      }
+    }
+
+    chart.canvas.addEventListener('mousemove', (evt) => {
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (points.length) {
         const idx = points[0].index;
         const ts = data.labels[idx];
         if (hoverTs === ts) return;
         hoverTs = ts;
-        const res = await fetch(`/frames/${ts}`);
-        if (!res.ok) return;
-        const json = await res.json();
+        const frames = frameCache[ts];
+        if (!frames) return;
         frameWindow.innerHTML = '';
-        json.frames.filter(f => f.index !== 1).forEach(f => {
+        frames.sort((a, b) => a.index - b.index).forEach(f => {
           const img = document.createElement('img');
-          img.src = `/frames/${ts}/${f.index}`;
+          img.src = f.url;
           img.alt = f.filename;
           img.title = f.filename;
           img.className = 'img-fluid mb-2';
