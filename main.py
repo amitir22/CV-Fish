@@ -1,4 +1,12 @@
 import sys
+"""Capture frames, compute optical-flow metrics and update the UI.
+
+This module orchestrates the full data-processing loop: it repeatedly
+captures a short window of frames from a configured video source,
+computes multiple optical-flow metrics for several frame pairs and logs
+the results to CSV while feeding the live Bollinger chart.
+"""
+
 import numpy as np
 import cv2 as cv
 from typing import Tuple
@@ -57,9 +65,10 @@ def capture_sample(video_source: str, num_frames: int, super_pixel_dimensions: T
 
 
 def main():
+    """Continuously capture frame windows and process optical-flow metrics."""
+    # Determine which video source to use.  For now we favour the NVR
+    # stream but the logic is easily adaptable for other sources.
     # is_webcam = True
-    # # If program was used:
-    # # /path> python main.py path/to/file.extension
     # if len(sys.argv) > 1:
     #     is_webcam = False
     is_webcam = False
@@ -72,7 +81,7 @@ def main():
     else:  # video source is a video file
         # video_source = sys.argv[1]
         video_source = VIDEO_SOURCE["FILE"]
-        
+
     super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS  # can be modified
 
     # Prepare metric extractors once
@@ -82,6 +91,7 @@ def main():
         "TVL1": {"kwargs": conf.DEFAULT_TVL1_PARAMS, "function": extract_TVL1_metric},
     }
 
+    # Prepare the live chart UI and pair labels for frame comparisons
     pair_labels = [f"1-{i}" for i in range(2, conf.FRAME_WINDOW_SIZE + 1)]
     chart = live_bollinger_gui.MultiPairBollingerChart(
         pair_labels, t_window=conf.T_WINDOW, num_std=conf.BOLLINGER_NUM_STD_OF_BANDS
@@ -90,6 +100,7 @@ def main():
     capture_interval = conf.CAPTURE_INTERVAL_MINUTES * 60
 
     while True:
+        # Capture a short sequence of frames from the source
         frames = capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
         if len(frames) < conf.FRAME_WINDOW_SIZE:
             print("Failed to capture enough frames")
@@ -101,6 +112,7 @@ def main():
         output_file_path = f"./output/{date_str}.csv"
         time_stamp = now.isoformat()
 
+        # Compare the first frame with every subsequent frame in the window
         for idx in range(1, conf.FRAME_WINDOW_SIZE):
             metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
             pair_label = f"1-{idx+1}"
@@ -115,6 +127,7 @@ def main():
             flow = metrics["Farneback"].get("flow_matrix")
             chart.push_new_data(data_dict, frame=frames[0], flow=flow, pair_name=pair_label)
 
+        # Wait before sampling again
         sleep(capture_interval)
 
     # Should never reach here but ensure clean up

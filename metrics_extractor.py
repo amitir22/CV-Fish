@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""
-metrics_extractor.py
+"""Utility functions for calculating optical-flow metrics.
+
+The functions in this module convert frames to grey-scale, compute
+several optical-flow algorithms (Farneback, TVL1 and Lucas–Kanade) and
+aggregate their results into convenient summary statistics.  Helper
+functions are also provided to append these metrics to CSV files for
+later analysis.
 """
 
 import csv
@@ -10,7 +15,14 @@ import numpy as np
 from typing import Dict, Any, Tuple
 import cv_fish_configuration as conf
 
+
 def get_std_angle(angles, angular_mean):
+    """Placeholder for an angular standard-deviation calculation.
+
+    The function is currently a stub and will later be used to compute
+    the circular standard deviation of a set of angles around
+    ``angular_mean``.
+    """
     offset = np.pi - angular_mean
     # TODO: add `offset` to all the angles
     # TODO: calculate angular_std from np.pi by numerical value
@@ -207,7 +219,27 @@ def calculate_flow_metrics(flow: np.ndarray):
 
 
 def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
-     # Make sure all parent directories exist
+    """Append a row per metric to a CSV file.
+
+    If the file does not yet exist it will be created along with its
+    parent directories and a header row.  Metrics are written in the
+    format ``metric_name,time,magnitude_mean,magnitude_deviation,
+    angular_deviation,angular_mean``.
+
+    Parameters
+    ----------
+    output_path:
+        Target CSV file path.
+    metrics:
+        Dictionary keyed by metric name with the structure produced by
+        :func:`extract_metrics`.
+    time_units:
+        Time label to write for each row.  For example an ISO timestamp.
+    pair_name:
+        Optional prefix added to the metric name to identify which frame
+        pair produced the measurement.
+    """
+    # Make sure all parent directories exist
     directory = os.path.dirname(output_path)
     if directory:  # Only try to create if there's an actual directory path
         os.makedirs(directory, exist_ok=True)
@@ -240,36 +272,31 @@ def append_metrics(output_path: str, metrics, time_units, pair_name: str = ""):
 
 
 def extract_metrics(frame1: np.ndarray, frame2: np.ndarray, metric_extract_functions: Dict):
-    """
-    Extracting metric metrics from the 2 given frames, running all the metric extract fucntions.
+    """Run each metric extractor on a pair of frames.
 
-    Parameters:
-        frame1 (numpy.ndarray): The 1st frame.
-        frame2 (numpy.ndarray): The 2nd frame.
-        metric_extract_functions (Dict["metric name", Dict["function", "kwargs"]]):
-            a dictionary of the form:
-            {
-                "metric_name1": {
-                    "function": func_name1(frame1, frame2, **kwargs),
-                    "kwargs": {
-                        "arg1_name": arg1_value,
-                        "arg2_name": arg2_value,
-                        ...
-                    }
-                }, 
-                "metric_name2": {
-                    "function": func_name2(frame1, frame2, **kwargs),
-                    "kwargs": {
-                        "arg1_name": arg1_value,
-                        "arg2_name": arg2_value,
-                        ...
-                    }
-                },
-                ...
-            }
+    The ``metric_extract_functions`` argument specifies which extractor
+    functions to run and the keyword arguments to pass to each one.
+    Typical usage is::
 
-    Returns:
-        dict: A dictionary containing the magnitude sum, 
+        metric_extractors = {
+            "Farneback": {"function": extract_farneback_metric, "kwargs": {...}},
+            "TVL1": {"function": extract_TVL1_metric, "kwargs": {...}},
+        }
+        metrics = extract_metrics(frame_a, frame_b, metric_extractors)
+
+    Parameters
+    ----------
+    frame1, frame2:
+        Frames to compare.
+    metric_extract_functions:
+        Dictionary whose keys are metric names and values are dictionaries
+        with ``function`` and ``kwargs`` entries.
+
+    Returns
+    -------
+    dict
+        A mapping of metric name to the dictionary returned by each
+        extractor.
     """
     metrics = dict()
 
@@ -278,7 +305,7 @@ def extract_metrics(frame1: np.ndarray, frame2: np.ndarray, metric_extract_funct
         current_kwargs = metric_extract_functions[metric_name]["kwargs"]
 
         metrics[metric_name] = current_metric_extract_function(frame1, frame2, **current_kwargs)
-        
+
     return metrics
 
 

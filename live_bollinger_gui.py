@@ -1,3 +1,10 @@
+"""Interactive plotting utilities for visualising metric trends.
+
+The :class:`MultiPairBollingerChart` class provides a simple live plot
+that displays metric values and their Bollinger bands for multiple frame
+pairs.  A dropdown widget allows the user to switch between pairs.
+"""
+
 import time
 from collections import defaultdict
 import numpy as np
@@ -12,6 +19,19 @@ class MultiPairBollingerChart:
     """Display Bollinger metrics for multiple frame pairs with a dropdown selector."""
 
     def __init__(self, pair_labels, t_window: float = 10.0, num_std: float = 2.0):
+        """Initialise the chart.
+
+        Parameters
+        ----------
+        pair_labels:
+            Iterable of labels such as ``"1-2"`` identifying the frame
+            pairs available for plotting.
+        t_window:
+            Length of the rolling time window to display.
+        num_std:
+            Number of standard deviations used to draw the Bollinger
+            bands.
+        """
         self.t_window = t_window
         self.num_std = num_std
         self.pair_labels = pair_labels
@@ -40,6 +60,7 @@ class MultiPairBollingerChart:
         self.dropdown.on_changed(self._on_pair_change)
 
     def _on_pair_change(self, label):
+        """Callback fired when the user selects a different frame pair."""
         self.current_pair = label
         self._set_line_visibility()
         if self.frames[label] is not None:
@@ -56,6 +77,7 @@ class MultiPairBollingerChart:
         flow: np.ndarray = None,
         pair_name: str = None,
     ):
+        """Add a new metric sample and optionally update the image/flow display."""
         now = time.time()
         if pair_name is None:
             pair_name = self.current_pair
@@ -86,6 +108,7 @@ class MultiPairBollingerChart:
         self.fig.canvas.flush_events()
 
     def _create_line(self, key: str):
+        """Initialise plot lines to track a new metric."""
         line_val, = self.ax_boll.plot([], [], label=f"{key} (value)")
         base_color = line_val.get_color()
         line_up, = self.ax_boll.plot([], [], label=f"{key} (upper)", color=base_color, alpha=0.35)
@@ -101,6 +124,7 @@ class MultiPairBollingerChart:
         self._set_line_visibility()
 
     def _set_line_visibility(self):
+        """Show only the metrics related to the currently selected pair."""
         for pair, keys in self.pair_map.items():
             visible = pair == self.current_pair
             for key in keys:
@@ -110,6 +134,7 @@ class MultiPairBollingerChart:
         self.ax_boll.legend()
 
     def _update_bollinger_plot(self):
+        """Redraw the Bollinger lines using the most recent data window."""
         now = time.time()
         cutoff = now - self.t_window
         for data in self.line_data.values():
@@ -139,6 +164,7 @@ class MultiPairBollingerChart:
         self.ax_boll.autoscale_view(scalex=False, scaley=True)
 
     def _update_image(self, frame: np.ndarray):
+        """Display the latest frame in the side panel."""
         if self.im is None:
             self.im = self.ax_img.imshow(frame)
         else:
@@ -147,6 +173,7 @@ class MultiPairBollingerChart:
         self.ax_img.axis("off")
 
     def _update_flow_quiver(self, flow: np.ndarray, step: int = 15):
+        """Overlay a sparse quiver plot of optical flow vectors on the frame."""
         if flow.ndim != 3 or flow.shape[2] != 2:
             print("Flow must be shape (H, W, 2). Skipping quiver.")
             return

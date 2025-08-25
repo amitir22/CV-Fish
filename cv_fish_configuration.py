@@ -1,3 +1,16 @@
+"""Central configuration for the CV-Fish project.
+
+This module centralises all tunable parameters used throughout the
+application.  It includes default keyword arguments for the optical flow
+metric extractors as well as runtime values that control sampling
+behaviour and the live Bollinger GUI.
+
+Each constant is defined using :class:`typing.Final` to communicate that
+the value is intended to be immutable.  If you need to modify a
+configuration at runtime, make a copy instead of mutating these
+structures directly.
+"""
+
 import cv2
 from frozendict import frozendict
 from typing import Final, Tuple
@@ -76,11 +89,22 @@ QUIVER_KWARGS = frozendict({
 # Main Parameters:
 # =============================================================================
 T_WINDOW: Final[int] = 100
+"""Length of the rolling time window (seconds) displayed in the Bollinger chart."""
+
 BOLLINGER_NUM_STD_OF_BANDS: Final[float] = 2.0
+"""Number of standard deviations used to draw Bollinger bands."""
+
 DEFAULT_SUPER_PIXEL_SHAPE: Final[Tuple[int, int]] = (1, 1)
-WEBCAM_RETRY_INTERVAL_SECONDS: Final[int] = 2  # The frame polling interval when failing to retrieve a frame
+"""Factor by which incoming frames are downscaled in height and width."""
+
+WEBCAM_RETRY_INTERVAL_SECONDS: Final[int] = 2
+"""The frame polling interval when failing to retrieve a frame from the capture device."""
+
 # Number of frames to capture in each sampling window
 FRAME_WINDOW_SIZE: Final[int] = 5
+
 # Interval between capture sessions in minutes
 CAPTURE_INTERVAL_MINUTES: Final[int] = 10
+
 DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)
+"""Default dimensions used when downscaling frames for processing."""
