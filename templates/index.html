@@ -51,7 +51,7 @@
       const json = await res.json();
       const rows = json.metrics;
       const unique = Array.from(new Set(rows.map(r => `${r.pair}_${r.metric_name}`)));
-      if (!selectedMetric) {
+      if (!selectedMetric && unique.length) {
         selectedMetric = unique[0];
         unique.forEach(name => {
           const opt = document.createElement('option');
@@ -62,17 +62,18 @@
         metricSelect.value = selectedMetric;
       }
       const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
-      if (filtered.length === 0) return;
-      const label = selectedMetric.replace('_', ' ');
-      data.labels = filtered.map(r => r.time);
-      const values = filtered.map(r => parseFloat(r.magnitude_mean));
-      const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
-      data.datasets[0].label = label;
-      chart.options.plugins.title.text = label;
-      data.datasets[0].data = values;
-      data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
-      data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
-      chart.update();
+      if (filtered.length) {
+        const label = selectedMetric.replace('_', ' ');
+        data.labels = filtered.map(r => r.time);
+        const values = filtered.map(r => parseFloat(r.magnitude_mean));
+        const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
+        data.datasets[0].label = label;
+        chart.options.plugins.title.text = label;
+        data.datasets[0].data = values;
+        data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
+        data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
+        chart.update();
+      }
       await preloadFrames();
     }
 
