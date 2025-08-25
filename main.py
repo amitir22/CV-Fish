@@ -9,17 +9,14 @@ import os
 import threading
 from flask import Flask, jsonify, make_response, render_template, send_file
 
+import cv_fish_configuration as conf
 from metrics_worker import start_metrics_thread
 
 app = Flask(__name__)
 
-OUTPUT_DIR = './output'
-LATEST_FRAME_PATH = os.path.join(OUTPUT_DIR, 'latest_frame.jpg')
-LATEST_TS_PATH = os.path.join(OUTPUT_DIR, 'latest_frame_timestamp.txt')
-
 
 def _latest_csv() -> str | None:
-    files = sorted(glob.glob(os.path.join(OUTPUT_DIR, '*.csv')))
+    files = sorted(glob.glob(os.path.join(conf.OUTPUT_DIR, '*.csv')))
     return files[-1] if files else None
 
 
@@ -45,13 +42,13 @@ def get_all_metrics():
 @app.get('/frame')
 def get_last_frame():
     """Return the most recently saved frame with optical-flow quivers."""
-    if not os.path.exists(LATEST_FRAME_PATH):
+    if not os.path.exists(conf.LATEST_FRAME_PATH):
         return ('', 404)
     ts = ''
-    if os.path.exists(LATEST_TS_PATH):
-        with open(LATEST_TS_PATH, encoding='utf-8') as fh:
+    if os.path.exists(conf.LATEST_TS_PATH):
+        with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
             ts = fh.read().strip()
-    response = make_response(send_file(LATEST_FRAME_PATH, mimetype='image/jpeg'))
+    response = make_response(send_file(conf.LATEST_FRAME_PATH, mimetype='image/jpeg'))
     if ts:
         response.headers['X-Data-Timestamp'] = ts
     return response
@@ -62,7 +59,7 @@ def main():
     stop_event = threading.Event()
     thread = start_metrics_thread(stop_event)
     try:
-        app.run(host='0.0.0.0', port=5000)
+        app.run(host=conf.FLASK_HOST, port=conf.FLASK_PORT)
     finally:
         stop_event.set()
         thread.join()

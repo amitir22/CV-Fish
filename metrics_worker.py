@@ -19,28 +19,6 @@ from metrics_extractor import (
 )
 import cv_fish_configuration as conf
 
-# ---------------------------------------------------------------------------
-# Video source configuration
-# ---------------------------------------------------------------------------
-VIDOE_FILE_PATH = './Workable Data/Processed/DPH21_Above_IR10.avi'
-
-# TODO: fill the correct data for NVR source
-NVR_USER = 'admin'
-NVR_PASS = 'admin12345'
-NVR_IP = '0.0.0.0'  # within network
-NVR_PORT = '554'  # default port for the protocol, might not need change
-NVR_PATH = '/Streaming/Channels/101'
-
-VIDEO_SOURCE = {
-    'FILE': VIDOE_FILE_PATH,
-    'WEBCAM': 0,
-    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
-}
-
-OUTPUT_DIR = './output'
-LATEST_FRAME_PATH = os.path.join(OUTPUT_DIR, 'latest_frame.jpg')
-LATEST_TS_PATH = os.path.join(OUTPUT_DIR, 'latest_frame_timestamp.txt')
-
 
 def _get_next_frame(video_capture_object: cv.VideoCapture,
                     super_pixel_shape: Tuple[int, int] = conf.DEFAULT_SUPER_PIXEL_SHAPE):
@@ -83,10 +61,10 @@ def _draw_flow_quivers(frame, flow, step: int = 60):
 
 
 def _save_latest_frame(frame, flow, timestamp: str):
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(conf.OUTPUT_DIR, exist_ok=True)
     vis = _draw_flow_quivers(frame, flow)
-    cv.imwrite(LATEST_FRAME_PATH, vis)
-    with open(LATEST_TS_PATH, 'w', encoding='utf-8') as fh:
+    cv.imwrite(conf.LATEST_FRAME_PATH, vis)
+    with open(conf.LATEST_TS_PATH, 'w', encoding='utf-8') as fh:
         fh.write(timestamp)
 
 
@@ -96,11 +74,11 @@ def _metrics_loop(stop_event: threading.Event):
     is_nvr = True
 
     if is_webcam:
-        video_source = VIDEO_SOURCE['WEBCAM']
+        video_source = conf.VIDEO_SOURCE['WEBCAM']
     elif is_nvr:
-        video_source = VIDEO_SOURCE['NVR']
+        video_source = conf.VIDEO_SOURCE['NVR']
     else:
-        video_source = VIDEO_SOURCE['FILE']
+        video_source = conf.VIDEO_SOURCE['FILE']
 
     super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS
     capture_interval = conf.CAPTURE_INTERVAL_MINUTES * 60
@@ -128,7 +106,7 @@ def _metrics_loop(stop_event: threading.Event):
 
         now = datetime.now()
         date_str = now.strftime('%Y%m%d')
-        output_file_path = os.path.join(OUTPUT_DIR, f'{date_str}.csv')
+        output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
         time_stamp = now.isoformat()
 
         metrics = extract_metrics(frames[0], frames[1], metric_extractors)

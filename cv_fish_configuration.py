@@ -11,6 +11,7 @@ configuration at runtime, make a copy instead of mutating these
 structures directly.
 """
 
+import os
 import cv2
 from frozendict import frozendict
 from typing import Final, Tuple
@@ -108,3 +109,34 @@ CAPTURE_INTERVAL_MINUTES: Final[int] = 10
 
 DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)
 """Default dimensions used when downscaling frames for processing."""
+
+
+# =============================================================================
+# I/O paths and outputs:
+# =============================================================================
+OUTPUT_DIR: Final[str] = "./output"
+LATEST_FRAME_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame.jpg")
+LATEST_TS_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame_timestamp.txt")
+
+
+# =============================================================================
+# Video source configuration:
+# =============================================================================
+VIDOE_FILE_PATH: Final[str] = './Workable Data/Processed/DPH21_Above_IR10.avi'
+NVR_USER: Final[str] = 'admin'
+NVR_PASS: Final[str] = 'admin12345'
+NVR_IP: Final[str] = '0.0.0.0'  # within network
+NVR_PORT: Final[str] = '554'  # default port for the protocol, might not need change
+NVR_PATH: Final[str] = '/Streaming/Channels/101'
+VIDEO_SOURCE = frozendict({
+    'FILE': VIDOE_FILE_PATH,
+    'WEBCAM': 0,
+    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
+})
+
+
+# =============================================================================
+# Flask API configuration:
+# =============================================================================
+FLASK_HOST: Final[str] = '0.0.0.0'
+FLASK_PORT: Final[int] = 5000

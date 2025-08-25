@@ -7,6 +7,7 @@ computes multiple optical-flow metrics for several frame pairs and logs
 the results to CSV while feeding the live Bollinger chart.
 """
 
+import os
 import numpy as np
 import cv2 as cv
 from typing import Tuple
@@ -20,21 +21,6 @@ from metrics_extractor import (
 )
 import live_bollinger_gui
 import cv_fish_configuration as conf
-
-VIDOE_FILE_PATH = './Workable Data/Processed/DPH21_Above_IR10.avi'
-
-# TODO: fill the correct data
-NVR_USER = 'admin'
-NVR_PASS = 'admin12345'
-NVR_IP = '0.0.0.0'  # within network
-NVR_PORT = '554'  # default port for the protocol, might not need change
-NVR_PATH = '/Streaming/Channels/101'
-
-VIDEO_SOURCE = {
-    'FILE': VIDOE_FILE_PATH,
-    'WEBCAM': 0,
-    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
-}
 
 
 def get_next_frame(video_capture_object: cv.VideoCapture,
@@ -74,12 +60,12 @@ def main():
     is_nvr = True
 
     if is_webcam:
-        video_source = VIDEO_SOURCE["WEBCAM"]
+        video_source = conf.VIDEO_SOURCE["WEBCAM"]
     elif is_nvr:
-        video_source = VIDEO_SOURCE["NVR"]
+        video_source = conf.VIDEO_SOURCE["NVR"]
     else:  # video source is a video file
         # video_source = sys.argv[1]
-        video_source = VIDEO_SOURCE["FILE"]
+        video_source = conf.VIDEO_SOURCE["FILE"]
 
     super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS  # can be modified
 
@@ -108,7 +94,7 @@ def main():
 
         now = datetime.now()
         date_str = now.strftime("%Y%m%d")
-        output_file_path = f"./output/{date_str}.csv"
+        output_file_path = os.path.join(conf.OUTPUT_DIR, f"{date_str}.csv")
         time_stamp = now.isoformat()
 
         # Compare the first frame with every subsequent frame in the window
