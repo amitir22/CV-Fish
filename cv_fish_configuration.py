@@ -101,6 +101,9 @@ DEFAULT_SUPER_PIXEL_SHAPE: Final[Tuple[int, int]] = (1, 1)
 WEBCAM_RETRY_INTERVAL_SECONDS: Final[int] = 2
 """The frame polling interval when failing to retrieve a frame from the capture device."""
 
+CAPTURE_RETRY_ATTEMPTS: Final[int] = 3
+"""Number of times to reinitialise the capture device when frame collection fails."""
+
 # Number of frames to capture in each sampling window
 FRAME_WINDOW_SIZE: Final[int] = 5
 

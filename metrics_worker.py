@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import shutil
 import threading
+import time
 from datetime import datetime
 from typing import Tuple
 
@@ -35,16 +36,22 @@ def _get_next_frame(video_capture_object: cv.VideoCapture,
     return ret, frame
 
 
-def _capture_sample(video_source: str, num_frames: int, super_pixel_dimensions: Tuple[int, int]):
-    """Capture a fixed number of frames from the given video source."""
-    cap = cv.VideoCapture(video_source)
-    frames = []
-    for _ in range(num_frames):
-        ret, frame = _get_next_frame(cap, super_pixel_dimensions)
-        if not ret:
-            break
-        frames.append(frame)
-    cap.release()
+def _capture_sample(video_source: str,
+                    num_frames: int,
+                    super_pixel_dimensions: Tuple[int, int]):
+    """Capture a fixed number of frames with retry on failure."""
+    for attempt in range(conf.CAPTURE_RETRY_ATTEMPTS):
+        cap = cv.VideoCapture(video_source)
+        frames = []
+        for _ in range(num_frames):
+            ret, frame = _get_next_frame(cap, super_pixel_dimensions)
+            if not ret:
+                break
+            frames.append(frame)
+        cap.release()
+        if len(frames) == num_frames:
+            return frames
+        time.sleep(conf.WEBCAM_RETRY_INTERVAL_SECONDS)
     return frames
 
 
