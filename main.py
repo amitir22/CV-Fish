@@ -6,8 +6,9 @@ from __future__ import annotations
 import csv
 import glob
 import os
+import re
 import threading
-from flask import Flask, jsonify, make_response, render_template, send_file
+from flask import Flask, jsonify, make_response, render_template, send_file, request
 
 import cv_fish_configuration as conf
 from metrics_worker import start_metrics_thread
@@ -46,18 +47,30 @@ def favicon():
 
 
 @app.get('/frame')
-def get_last_frame():
-    """Return the most recently saved frame with optical-flow quivers."""
-    if not os.path.exists(conf.LATEST_FRAME_PATH):
-        return ('', 204)
-    ts = ''
-    if os.path.exists(conf.LATEST_TS_PATH):
-        with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
-            ts = fh.read().strip()
-    # Latest frame is stored as PNG; serve with matching mimetype
-    response = make_response(send_file(conf.LATEST_FRAME_PATH, mimetype='image/png'))
-    if ts:
-        response.headers['X-Data-Timestamp'] = ts
+@app.get('/frame/<timestamp>')
+def get_frame(timestamp: str | None = None):
+    """Return a frame by timestamp or the most recent one if none given."""
+    if timestamp is None:
+        qs = request.query_string.decode('utf-8')
+        if re.fullmatch(r"\d{8}-\d{6}", qs):
+            timestamp = qs
+    if timestamp:
+        pattern = os.path.join(conf.FRAMES_DIR, f'frame*-{timestamp}.png')
+        files = sorted(glob.glob(pattern))
+        if not files:
+            return ('', 404)
+        path = files[-1]
+    else:
+        if not os.path.exists(conf.LATEST_FRAME_PATH):
+            return ('', 204)
+        path = conf.LATEST_FRAME_PATH
+        timestamp = ''
+        if os.path.exists(conf.LATEST_TS_PATH):
+            with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
+                timestamp = fh.read().strip()
+    response = make_response(send_file(path, mimetype='image/png'))
+    if timestamp:
+        response.headers['X-Data-Timestamp'] = timestamp
     return response
 
 
