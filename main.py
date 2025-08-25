@@ -52,7 +52,7 @@ def get_frame(timestamp: str | None = None):
     """Return a frame by timestamp or the most recent one if none given."""
     if timestamp is None:
         qs = request.query_string.decode('utf-8')
-        if re.fullmatch(r"\d{8}-\d{6}", qs):
+        if re.fullmatch(r"\d{8}-\d{4}", qs):
             timestamp = qs
     if timestamp:
         pattern = os.path.join(conf.FRAMES_DIR, f'frame*-{timestamp}.png')

@@ -95,7 +95,7 @@ def main():
         now = datetime.now()
         date_str = now.strftime("%Y%m%d")
         output_file_path = os.path.join(conf.OUTPUT_DIR, f"{date_str}.csv")
-        time_stamp = now.isoformat()
+        time_stamp = now.strftime("%Y%m%d-%H%M")
 
         # Compare the first frame with every subsequent frame in the window
         for idx in range(1, conf.FRAME_WINDOW_SIZE):
