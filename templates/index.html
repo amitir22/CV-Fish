@@ -89,14 +89,19 @@
       const json = await res.json();
       for (const set of json.frame_sets) {
         if (!data.labels.includes(set.timestamp)) continue;
-        if (frameCache[set.timestamp]) continue;
-        frameCache[set.timestamp] = [];
+        const needed = set.frames.filter(f => f.index !== 1).length;
+        const cached = frameCache[set.timestamp]?.length || 0;
+        if (cached === needed) continue;
+        const frames = [];
         for (const f of set.frames) {
           if (f.index === 1) continue;
           const imgRes = await fetch(`/frames/${set.timestamp}/${f.index}`);
           if (!imgRes.ok) continue;
           const blob = await imgRes.blob();
-          frameCache[set.timestamp].push({index: f.index, url: URL.createObjectURL(blob), filename: f.filename});
+          frames.push({index: f.index, url: URL.createObjectURL(blob), filename: f.filename});
+        }
+        if (frames.length) {
+          frameCache[set.timestamp] = frames;
         }
       }
     }
