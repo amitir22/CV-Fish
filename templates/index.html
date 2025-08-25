@@ -14,7 +14,8 @@
         <canvas id="metricChart"></canvas>
       </div>
       <div class="col-md-4">
-        <img id="latestFrame" class="img-fluid" alt="Latest frame" />
+        <img id="latestFrame" class="img-fluid mb-2" alt="Latest frame" />
+        <div id="frameWindow" class="d-flex flex-column"></div>
       </div>
     </div>
 
@@ -26,9 +27,9 @@
     const data = {
       labels: [],
       datasets: [
-        {label: '', data: [], borderColor: 'blue', fill: false},
-        {label: 'Upper', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false},
-        {label: 'Lower', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false}
+        {label: '', data: [], borderColor: 'blue', fill: false, pointRadius: 3},
+        {label: 'Upper', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0},
+        {label: 'Lower', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0}
       ]
     };
     const chart = new Chart(ctx, {
@@ -36,6 +37,8 @@
       data,
       options: {animation: false, plugins: {title: {display: true, text: ''}}}
     });
+    const frameWindow = document.getElementById('frameWindow');
+    let hoverTs = null;
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
@@ -75,6 +78,26 @@
       const img = document.getElementById('latestFrame');
       img.src = '/frame?' + Date.now();
     }
+
+    chart.canvas.addEventListener('mousemove', async (evt) => {
+      const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
+      if (points.length) {
+        const idx = points[0].index;
+        const ts = data.labels[idx];
+        if (hoverTs === ts) return;
+        hoverTs = ts;
+        const res = await fetch(`/frames/${ts}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        frameWindow.innerHTML = '';
+        json.frames.filter(f => f.index !== 1).forEach(f => {
+          const img = document.createElement('img');
+          img.src = `/frames/${ts}/${f.index}`;
+          img.className = 'img-fluid mb-2';
+          frameWindow.appendChild(img);
+        });
+      }
+    });
 
     fetchMetrics();
     fetchFrame();

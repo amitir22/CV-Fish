@@ -117,6 +117,7 @@ DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)
 OUTPUT_DIR: Final[str] = "./output"
 LATEST_FRAME_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame.jpg")
 LATEST_TS_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame_timestamp.txt")
+FRAMES_DIR: Final[str] = os.path.join(OUTPUT_DIR, "frames")
 
 
 # =============================================================================

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 from datetime import datetime
 from typing import Tuple
@@ -60,12 +61,24 @@ def _draw_flow_quivers(frame, flow, step: int = 60):
     return vis
 
 
-def _save_latest_frame(frame, flow, timestamp: str):
-    os.makedirs(conf.OUTPUT_DIR, exist_ok=True)
-    vis = _draw_flow_quivers(frame, flow)
-    cv.imwrite(conf.LATEST_FRAME_PATH, vis)
-    with open(conf.LATEST_TS_PATH, 'w', encoding='utf-8') as fh:
-        fh.write(timestamp)
+def _save_frame_window(frames, flows, timestamp: str):
+    """Save all frames with quiver overlays and update the latest pointers."""
+    os.makedirs(conf.FRAMES_DIR, exist_ok=True)
+    last_path = None
+    # Save the first frame without quivers
+    base_path = os.path.join(conf.FRAMES_DIR, f'frame1-{timestamp}.png')
+    cv.imwrite(base_path, frames[0])
+    last_path = base_path
+    for idx in range(1, len(frames)):
+        flow = flows[idx - 1]
+        vis = _draw_flow_quivers(frames[idx], flow)
+        path = os.path.join(conf.FRAMES_DIR, f'frame{idx + 1}-{timestamp}.png')
+        cv.imwrite(path, vis)
+        last_path = path
+    if last_path:
+        shutil.copy(last_path, conf.LATEST_FRAME_PATH)
+        with open(conf.LATEST_TS_PATH, 'w', encoding='utf-8') as fh:
+            fh.write(timestamp)
 
 
 def _metrics_loop(stop_event: threading.Event):
@@ -107,15 +120,16 @@ def _metrics_loop(stop_event: threading.Event):
         now = datetime.now()
         date_str = now.strftime('%Y%m%d')
         output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
-        time_stamp = now.isoformat()
+        time_stamp = now.strftime('%Y%m%d-%H%M%S')
 
+        flows = []
         for idx in range(1, conf.FRAME_WINDOW_SIZE):
             metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
             pair_label = f'1-{idx+1}'
             append_metrics(output_file_path, metrics, time_stamp, pair_label)
-            if idx == 1:
-                flow = metrics['Farneback'].get('flow_matrix')
-                _save_latest_frame(frames[0], flow, time_stamp)
+            flows.append(metrics['Farneback'].get('flow_matrix'))
+
+        _save_frame_window(frames, flows, time_stamp)
 
         stop_event.wait(capture_interval)
 
