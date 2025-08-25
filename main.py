@@ -155,6 +155,11 @@ def get_logs():
 
 def main():
     """Start the metrics thread and run the Flask development server."""
+    # Log the RTSP source used for frame capture so operators know
+    # exactly which stream is being consumed.
+    rtsp_path = conf.VIDEO_SOURCE['NVR']
+    print(f"Capturing frames from RTSP source: {rtsp_path}")
+
     stop_event = threading.Event()
     thread = start_metrics_thread(stop_event)
     try:
