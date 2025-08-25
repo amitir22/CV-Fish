@@ -146,3 +146,7 @@ VIDEO_SOURCE = frozendict({
 # =============================================================================
 FLASK_HOST: Final[str] = '0.0.0.0'
 FLASK_PORT: Final[int] = 5000
+# Base URL used by background threads to report status back to the Flask API
+API_BASE_URL: Final[str] = f"http://127.0.0.1:{FLASK_PORT}"
+# Endpoint for worker success/error logging
+LOG_ENDPOINT: Final[str] = f"{API_BASE_URL}/logs"

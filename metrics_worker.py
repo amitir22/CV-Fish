@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Tuple
 
 import cv2 as cv
+import requests
 
 from metrics_extractor import (
     extract_farneback_metric,
@@ -81,6 +82,18 @@ def _save_frame_window(frames, flows, timestamp: str):
             fh.write(timestamp)
 
 
+def _post_log(level: str, message: str, timestamp: str) -> None:
+    """Send a log entry to the Flask server; failures are ignored."""
+    try:
+        requests.post(
+            conf.LOG_ENDPOINT,
+            json={'timestamp': timestamp, 'level': level, 'message': message},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
 def _prepare_output_paths():
     """Ensure directories and placeholder files exist for metrics output."""
     # Create output and frame directories
@@ -128,24 +141,30 @@ def _metrics_loop(stop_event: threading.Event):
     }
 
     while not stop_event.is_set():
-        frames = _capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
-        if len(frames) < conf.FRAME_WINDOW_SIZE:
-            stop_event.wait(capture_interval)
-            continue
+        try:
+            frames = _capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
+            now = datetime.now()
+            time_stamp = now.strftime(conf.TIMESTAMP_FORMAT)
+            if len(frames) < conf.FRAME_WINDOW_SIZE:
+                _post_log('error', 'insufficient frames captured', time_stamp)
+                stop_event.wait(capture_interval)
+                continue
 
-        now = datetime.now()
-        date_str = now.strftime('%Y%m%d')
-        output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
-        time_stamp = now.strftime(conf.TIMESTAMP_FORMAT)
+            date_str = now.strftime('%Y%m%d')
+            output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
 
-        flows = []
-        for idx in range(1, conf.FRAME_WINDOW_SIZE):
-            metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
-            pair_label = f'1-{idx+1}'
-            append_metrics(output_file_path, metrics, time_stamp, pair_label)
-            flows.append(metrics['Farneback'].get('flow_matrix'))
+            flows = []
+            for idx in range(1, conf.FRAME_WINDOW_SIZE):
+                metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
+                pair_label = f'1-{idx+1}'
+                append_metrics(output_file_path, metrics, time_stamp, pair_label)
+                flows.append(metrics['Farneback'].get('flow_matrix'))
 
-        _save_frame_window(frames, flows, time_stamp)
+            _save_frame_window(frames, flows, time_stamp)
+            _post_log('success', 'frame window processed', time_stamp)
+        except Exception as exc:
+            err_ts = datetime.now().strftime(conf.TIMESTAMP_FORMAT)
+            _post_log('error', str(exc), err_ts)
 
         stop_event.wait(capture_interval)
 

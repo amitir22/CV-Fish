@@ -15,6 +15,10 @@ from metrics_worker import start_metrics_thread
 
 app = Flask(__name__)
 
+# In-memory log storage for worker reports
+_logs: list[dict] = []
+_logs_lock = threading.Lock()
+
 
 def _latest_csv() -> str | None:
     files = sorted(glob.glob(os.path.join(conf.OUTPUT_DIR, '*.csv')))
@@ -125,6 +129,28 @@ def get_frame_by_index(timestamp: str, index: int):
     response = make_response(send_file(path, mimetype='image/png'))
     response.headers['X-Data-Timestamp'] = timestamp
     return response
+
+
+@app.post('/logs')
+def post_log():
+    """Receive a log entry from the metrics worker."""
+    data = request.get_json(force=True) or {}
+    entry = {
+        'timestamp': data.get('timestamp'),
+        'level': data.get('level', 'info'),
+        'message': data.get('message', '')
+    }
+    with _logs_lock:
+        _logs.append(entry)
+    return ('', 204)
+
+
+@app.get('/logs')
+def get_logs():
+    """Return all worker log entries sorted by timestamp descending."""
+    with _logs_lock:
+        ordered = sorted(_logs, key=lambda x: x.get('timestamp', ''), reverse=True)
+    return jsonify({'logs': ordered})
 
 
 def main():

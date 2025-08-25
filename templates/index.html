@@ -18,6 +18,10 @@
         <div id="frameWindow" class="d-flex flex-column"></div>
       </div>
     </div>
+    <div class="mt-4">
+      <h2>Worker Logs</h2>
+      <ul id="errorList" class="list-group"></ul>
+    </div>
 
     <script>
     const numStd = 2;
@@ -40,6 +44,7 @@
     const frameWindow = document.getElementById('frameWindow');
     const frameCache = {};
     let hoverTs = null;
+    const errorList = document.getElementById('errorList');
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
@@ -107,6 +112,19 @@
       }
     }
 
+    async function fetchLogs() {
+      const res = await fetch('/logs');
+      if (!res.ok) return;
+      const json = await res.json();
+      errorList.innerHTML = '';
+      json.logs.filter(l => l.level === 'error').forEach(log => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.textContent = `${log.timestamp}: ${log.message}`;
+        errorList.appendChild(li);
+      });
+    }
+
     chart.canvas.addEventListener('mousemove', (evt) => {
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (points.length) {
@@ -130,8 +148,10 @@
 
     fetchMetrics();
     fetchFrame();
+    fetchLogs();
     setInterval(fetchMetrics, 5000);
     setInterval(fetchFrame, 5000);
+    setInterval(fetchLogs, 5000);
     </script>
   </body>
 </html>

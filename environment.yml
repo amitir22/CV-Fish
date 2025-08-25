@@ -30,6 +30,7 @@ dependencies:
 
   # Web server
   - flask
+  - requests
 
   # Interactive work
   - ipython
