@@ -95,6 +95,8 @@
         json.frames.filter(f => f.index !== 1).forEach(f => {
           const img = document.createElement('img');
           img.src = `/frames/${ts}/${f.index}`;
+          img.alt = f.filename;
+          img.title = f.filename;
           img.className = 'img-fluid mb-2';
           frameWindow.appendChild(img);
         });

@@ -54,7 +54,8 @@ def get_last_frame():
     if os.path.exists(conf.LATEST_TS_PATH):
         with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
             ts = fh.read().strip()
-    response = make_response(send_file(conf.LATEST_FRAME_PATH, mimetype='image/jpeg'))
+    # Latest frame is stored as PNG; serve with matching mimetype
+    response = make_response(send_file(conf.LATEST_FRAME_PATH, mimetype='image/png'))
     if ts:
         response.headers['X-Data-Timestamp'] = ts
     return response
@@ -78,7 +79,7 @@ def list_frames(timestamp: str):
     for p in files:
         base = os.path.basename(p)
         idx = int(base.split('-', 1)[0].replace('frame', ''))
-        frames.append({'index': idx})
+        frames.append({'index': idx, 'filename': base})
     return jsonify({'timestamp': timestamp, 'frames': frames})
 
 
