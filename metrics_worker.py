@@ -81,8 +81,24 @@ def _save_frame_window(frames, flows, timestamp: str):
             fh.write(timestamp)
 
 
+def _prepare_output_paths():
+    """Ensure directories and placeholder files exist for metrics output."""
+    # Create output and frame directories
+    os.makedirs(conf.FRAMES_DIR, exist_ok=True)
+    os.makedirs(conf.OUTPUT_DIR, exist_ok=True)
+    # Touch latest-frame paths so later writes don't fail
+    for path in (conf.LATEST_FRAME_PATH, conf.LATEST_TS_PATH):
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        if not os.path.exists(path):
+            open(path, 'a', encoding='utf-8').close()
+
+
 def _metrics_loop(stop_event: threading.Event):
     """Continuously capture frames and update CSV/image outputs."""
+    _prepare_output_paths()
+
     is_webcam = False
     is_nvr = True
 
