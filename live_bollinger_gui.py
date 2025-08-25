@@ -107,6 +107,12 @@ class MultiPairBollingerChart:
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
+    def wait_with_ui(self, seconds: float, poll_interval: float = 0.1):
+        """Sleep while keeping the matplotlib UI responsive."""
+        end_time = time.time() + seconds
+        while time.time() < end_time:
+            plt.pause(poll_interval)
+
     def _create_line(self, key: str):
         """Initialise plot lines to track a new metric."""
         line_val, = self.ax_boll.plot([], [], label=f"{key} (value)")

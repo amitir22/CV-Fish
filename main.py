@@ -11,7 +11,6 @@ import numpy as np
 import cv2 as cv
 from typing import Tuple
 from datetime import datetime
-from time import sleep
 from metrics_extractor import (
     extract_farneback_metric,
     extract_TVL1_metric,
@@ -104,7 +103,7 @@ def main():
         frames = capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
         if len(frames) < conf.FRAME_WINDOW_SIZE:
             print("Failed to capture enough frames")
-            sleep(capture_interval)
+            chart.wait_with_ui(capture_interval)
             continue
 
         now = datetime.now()
@@ -127,8 +126,8 @@ def main():
             flow = metrics["Farneback"].get("flow_matrix")
             chart.push_new_data(data_dict, frame=frames[0], flow=flow, pair_name=pair_label)
 
-        # Wait before sampling again
-        sleep(capture_interval)
+        # Wait before sampling again but keep the UI responsive
+        chart.wait_with_ui(capture_interval)
 
     # Should never reach here but ensure clean up
     cv.destroyAllWindows()
