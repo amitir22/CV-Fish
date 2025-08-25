@@ -28,6 +28,9 @@ dependencies:
   - blobfile
   - spectral
 
+  # Web server
+  - flask
+
   # Interactive work
   - ipython
 

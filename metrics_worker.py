@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""Background thread that captures frames and updates metric CSV/images."""
+
+from __future__ import annotations
+
+import os
+import threading
+from datetime import datetime
+from typing import Tuple
+
+import cv2 as cv
+
+from metrics_extractor import (
+    extract_farneback_metric,
+    extract_TVL1_metric,
+    extract_lucas_kanade_metric,
+    extract_metrics,
+    append_metrics,
+)
+import cv_fish_configuration as conf
+
+# ---------------------------------------------------------------------------
+# Video source configuration
+# ---------------------------------------------------------------------------
+VIDOE_FILE_PATH = './Workable Data/Processed/DPH21_Above_IR10.avi'
+
+# TODO: fill the correct data for NVR source
+NVR_USER = 'admin'
+NVR_PASS = 'admin12345'
+NVR_IP = '0.0.0.0'  # within network
+NVR_PORT = '554'  # default port for the protocol, might not need change
+NVR_PATH = '/Streaming/Channels/101'
+
+VIDEO_SOURCE = {
+    'FILE': VIDOE_FILE_PATH,
+    'WEBCAM': 0,
+    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
+}
+
+OUTPUT_DIR = './output'
+LATEST_FRAME_PATH = os.path.join(OUTPUT_DIR, 'latest_frame.jpg')
+LATEST_TS_PATH = os.path.join(OUTPUT_DIR, 'latest_frame_timestamp.txt')
+
+
+def _get_next_frame(video_capture_object: cv.VideoCapture,
+                    super_pixel_shape: Tuple[int, int] = conf.DEFAULT_SUPER_PIXEL_SHAPE):
+    """Get the next frame and apply super pixel downscaling."""
+    ret, frame = video_capture_object.read()
+    if ret:
+        frame = cv.resize(
+            frame,
+            (frame.shape[1] // super_pixel_shape[1], frame.shape[0] // super_pixel_shape[0]),
+            interpolation=cv.INTER_LINEAR,
+        )
+    return ret, frame
+
+
+def _capture_sample(video_source: str, num_frames: int, super_pixel_dimensions: Tuple[int, int]):
+    """Capture a fixed number of frames from the given video source."""
+    cap = cv.VideoCapture(video_source)
+    frames = []
+    for _ in range(num_frames):
+        ret, frame = _get_next_frame(cap, super_pixel_dimensions)
+        if not ret:
+            break
+        frames.append(frame)
+    cap.release()
+    return frames
+
+
+def _draw_flow_quivers(frame, flow, step: int = 60):
+    """Overlay a sparse quiver plot of optical flow vectors on the frame."""
+    if flow is None:
+        return frame
+    h, w = frame.shape[:2]
+    vis = frame.copy()
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            fx, fy = flow[y, x]
+            end_point = (int(x + fx), int(y + fy))
+            cv.arrowedLine(vis, (x, y), end_point, (0, 0, 255), 1, tipLength=0.3)
+    return vis
+
+
+def _save_latest_frame(frame, flow, timestamp: str):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    vis = _draw_flow_quivers(frame, flow)
+    cv.imwrite(LATEST_FRAME_PATH, vis)
+    with open(LATEST_TS_PATH, 'w', encoding='utf-8') as fh:
+        fh.write(timestamp)
+
+
+def _metrics_loop(stop_event: threading.Event):
+    """Continuously capture frames and update CSV/image outputs."""
+    is_webcam = False
+    is_nvr = True
+
+    if is_webcam:
+        video_source = VIDEO_SOURCE['WEBCAM']
+    elif is_nvr:
+        video_source = VIDEO_SOURCE['NVR']
+    else:
+        video_source = VIDEO_SOURCE['FILE']
+
+    super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS
+    capture_interval = conf.CAPTURE_INTERVAL_MINUTES * 60
+
+    metric_extractors = {
+        'Lucas-Kanade': {
+            'kwargs': conf.DEFAULT_LUCAS_KANADE_PARAMS,
+            'function': extract_lucas_kanade_metric
+        },
+        'Farneback': {
+            'kwargs': conf.DEFAULT_FARNEBACK_PARAMS,
+            'function': extract_farneback_metric
+        },
+        'TVL1': {
+            'kwargs': conf.DEFAULT_TVL1_PARAMS,
+            'function': extract_TVL1_metric
+        },
+    }
+
+    while not stop_event.is_set():
+        frames = _capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
+        if len(frames) < 2:
+            stop_event.wait(capture_interval)
+            continue
+
+        now = datetime.now()
+        date_str = now.strftime('%Y%m%d')
+        output_file_path = os.path.join(OUTPUT_DIR, f'{date_str}.csv')
+        time_stamp = now.isoformat()
+
+        metrics = extract_metrics(frames[0], frames[1], metric_extractors)
+        append_metrics(output_file_path, metrics, time_stamp, '1-2')
+
+        flow = metrics['Farneback'].get('flow_matrix')
+        _save_latest_frame(frames[0], flow, time_stamp)
+
+        stop_event.wait(capture_interval)
+
+
+def start_metrics_thread(stop_event: threading.Event) -> threading.Thread:
+    """Start the metrics extraction thread."""
+    thread = threading.Thread(target=_metrics_loop, args=(stop_event,), daemon=True)
+    thread.start()
+    return thread
+
