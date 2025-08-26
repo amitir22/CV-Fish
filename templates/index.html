@@ -60,6 +60,7 @@
     const frameWindow = document.getElementById('frameWindow');
     const frameCache = {};
     let hoverTs = null;
+    let pinnedTs = null;
     const errorList = document.getElementById('errorList');
 
     metricSelect.addEventListener('change', () => {
@@ -141,6 +142,20 @@
       });
     }
 
+    function showFrames(ts) {
+      const frames = frameCache[ts];
+      if (!frames) return;
+      frameWindow.innerHTML = '';
+      frames.sort((a, b) => a.index - b.index).forEach(f => {
+        const img = document.createElement('img');
+        img.src = f.url;
+        img.alt = f.filename;
+        img.title = f.filename;
+        img.className = 'img-fluid mb-2';
+        frameWindow.appendChild(img);
+      });
+    }
+
     chart.canvas.addEventListener('mousemove', (evt) => {
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (points.length) {
@@ -148,18 +163,32 @@
         const ts = data.labels[idx];
         if (hoverTs === ts) return;
         hoverTs = ts;
-        const frames = frameCache[ts];
-        if (!frames) return;
-        frameWindow.innerHTML = '';
-        frames.sort((a, b) => a.index - b.index).forEach(f => {
-          const img = document.createElement('img');
-          img.src = f.url;
-          img.alt = f.filename;
-          img.title = f.filename;
-          img.className = 'img-fluid mb-2';
-          frameWindow.appendChild(img);
-        });
+        showFrames(ts);
+      } else {
+        hoverTs = null;
+        if (pinnedTs) {
+          showFrames(pinnedTs);
+        } else {
+          frameWindow.innerHTML = '';
+        }
       }
+    });
+
+    chart.canvas.addEventListener('mouseleave', () => {
+      hoverTs = null;
+      if (pinnedTs) {
+        showFrames(pinnedTs);
+      } else {
+        frameWindow.innerHTML = '';
+      }
+    });
+
+    chart.canvas.addEventListener('click', (evt) => {
+      const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
+      if (!points.length) return;
+      const idx = points[0].index;
+      pinnedTs = data.labels[idx];
+      showFrames(pinnedTs);
     });
 
     fetchMetrics();
