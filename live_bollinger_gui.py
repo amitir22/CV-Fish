@@ -48,6 +48,7 @@ class MultiPairBollingerChart:
         self.ax_boll.set_xlim(0, self.t_window)
         self.ax_boll.set_xlabel("Time (seconds, recent window)")
         self.ax_boll.set_ylabel("Value (+/- std dev)")
+        self.ax_boll.set_title(f"Pair {self.current_pair}")
 
         self.im = None
         self.quiver = None
@@ -67,6 +68,7 @@ class MultiPairBollingerChart:
             self._update_image(self.frames[label])
         if self.flows[label] is not None:
             self._update_flow_quiver(self.flows[label], step=60)
+        self.ax_boll.set_title(f"Pair {self.current_pair}")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
@@ -115,10 +117,11 @@ class MultiPairBollingerChart:
 
     def _create_line(self, key: str):
         """Initialise plot lines to track a new metric."""
-        line_val, = self.ax_boll.plot([], [], label=f"{key} (value)")
+        label = key.replace('_', ' ')
+        line_val, = self.ax_boll.plot([], [], label=f"{label} (value)")
         base_color = line_val.get_color()
-        line_up, = self.ax_boll.plot([], [], label=f"{key} (upper)", color=base_color, alpha=0.35)
-        line_down, = self.ax_boll.plot([], [], label=f"{key} (lower)", color=base_color, alpha=0.35)
+        line_up, = self.ax_boll.plot([], [], label=f"{label} (upper)", color=base_color, alpha=0.35)
+        line_down, = self.ax_boll.plot([], [], label=f"{label} (lower)", color=base_color, alpha=0.35)
         self.line_data[key] = {
             "times": [],
             "values": [],

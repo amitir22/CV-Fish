@@ -11,6 +11,7 @@ configuration at runtime, make a copy instead of mutating these
 structures directly.
 """
 
+import os
 import cv2
 from frozendict import frozendict
 from typing import Final, Tuple
@@ -100,6 +101,9 @@ DEFAULT_SUPER_PIXEL_SHAPE: Final[Tuple[int, int]] = (1, 1)
 WEBCAM_RETRY_INTERVAL_SECONDS: Final[int] = 2
 """The frame polling interval when failing to retrieve a frame from the capture device."""
 
+CAPTURE_RETRY_ATTEMPTS: Final[int] = 3
+"""Number of times to reinitialise the capture device when frame collection fails."""
+
 # Number of frames to capture in each sampling window
 FRAME_WINDOW_SIZE: Final[int] = 5
 
@@ -108,3 +112,46 @@ CAPTURE_INTERVAL_MINUTES: Final[int] = 10
 
 DEFAULT_SUPER_PIXEL_DIMEMSNIONS = (4, 4)
 """Default dimensions used when downscaling frames for processing."""
+
+# Timestamp format used for metric rows and frame filenames
+TIMESTAMP_FORMAT: Final[str] = "%Y%m%d-%H%M%S"
+
+
+# =============================================================================
+# I/O paths and outputs:
+# =============================================================================
+OUTPUT_DIR: Final[str] = "./output"
+# Latest frame saved by the metrics worker; stored as PNG to align with
+# persistent frame-window naming (frame<idx>-YYYYMMDD-hhmmss.png)
+LATEST_FRAME_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame.png")
+LATEST_TS_PATH: Final[str] = os.path.join(OUTPUT_DIR, "latest_frame_timestamp.txt")
+FRAMES_DIR: Final[str] = os.path.join(OUTPUT_DIR, "frames")
+
+
+# =============================================================================
+# Video source configuration:
+# =============================================================================
+VIDOE_FILE_PATH: Final[str] = './Workable Data/Processed/DPH21_Above_IR10.avi'
+NVR_USER: Final[str] = 'admin'
+NVR_PASS: Final[str] = 'admin12345'
+# IP of the network video recorder. Override via the NVR_IP environment
+# variable if necessary.
+NVR_IP: Final[str] = os.getenv('NVR_IP', '192.168.1.56')
+NVR_PORT: Final[str] = '554'  # default port for the protocol, might not need change
+NVR_PATH: Final[str] = '/Streaming/Channels/101'
+VIDEO_SOURCE = frozendict({
+    'FILE': VIDOE_FILE_PATH,
+    'WEBCAM': 0,
+    'NVR': f"rtsp://{NVR_USER}:{NVR_PASS}@{NVR_IP}:{NVR_PORT}{NVR_PATH}"
+})
+
+
+# =============================================================================
+# Flask API configuration:
+# =============================================================================
+FLASK_HOST: Final[str] = '0.0.0.0'
+FLASK_PORT: Final[int] = 5000
+# Base URL used by background threads to report status back to the Flask API
+API_BASE_URL: Final[str] = f"http://127.0.0.1:{FLASK_PORT}"
+# Endpoint for worker success/error logging
+LOG_ENDPOINT: Final[str] = f"{API_BASE_URL}/logs"
