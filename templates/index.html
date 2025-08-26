@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>CV-Fish Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/slate/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container my-4">
+      <h1 class="mb-4 text-center">CV-Fish Live Metrics</h1>
+      <div class="row g-4">
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-body">
+              <select id="metricSelect" class="form-select mb-3"></select>
+              <canvas id="metricChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card mb-4">
+            <div class="card-body">
+              <img id="latestFrame" class="img-fluid mb-3" alt="Latest frame" />
+              <div id="frameWindow" class="d-flex flex-column"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row mt-4">
+        <div class="col">
+          <div class="card">
+            <div class="card-body">
+              <h2 class="h5">Worker Logs</h2>
+              <ul id="errorList" class="list-group list-group-flush"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    const numStd = 2;
+    const metricSelect = document.getElementById('metricSelect');
+    let selectedMetric = null;
+    const ctx = document.getElementById('metricChart').getContext('2d');
+    const data = {
+      labels: [],
+      datasets: [
+        {label: '', data: [], borderColor: 'blue', fill: false, pointRadius: 3},
+        {label: 'Upper', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0},
+        {label: 'Lower', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0}
+      ]
+    };
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data,
+      options: {animation: false, plugins: {title: {display: true, text: ''}}}
+    });
+    const frameWindow = document.getElementById('frameWindow');
+    const frameCache = {};
+    let hoverTs = null;
+    let pinnedTs = null;
+    const errorList = document.getElementById('errorList');
+
+    metricSelect.addEventListener('change', () => {
+      selectedMetric = metricSelect.value;
+      fetchMetrics();
+    });
+
+    async function fetchMetrics() {
+      const res = await fetch('/metrics');
+      const json = await res.json();
+      const rows = json.metrics;
+      const unique = Array.from(new Set(rows.map(r => `${r.pair}_${r.metric_name}`)));
+      if (!selectedMetric && unique.length) {
+        selectedMetric = unique[0];
+        unique.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name.replace('_', ' ');
+          metricSelect.appendChild(opt);
+        });
+        metricSelect.value = selectedMetric;
+      }
+      const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
+      if (filtered.length) {
+        const label = selectedMetric.replace('_', ' ');
+        data.labels = filtered.map(r => r.time);
+        const values = filtered.map(r => parseFloat(r.magnitude_mean));
+        const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
+        data.datasets[0].label = label;
+        chart.options.plugins.title.text = label;
+        data.datasets[0].data = values;
+        data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
+        data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
+        chart.update();
+      }
+      await preloadFrames();
+    }
+
+    async function fetchFrame() {
+      const res = await fetch('/frame', {cache: 'no-store'});
+      if (!res.ok || res.status === 204) return;
+      const blob = await res.blob();
+      document.getElementById('latestFrame').src = URL.createObjectURL(blob);
+    }
+
+    async function preloadFrames() {
+      const res = await fetch('/frames/all');
+      if (!res.ok) return;
+      const json = await res.json();
+      for (const set of json.frame_sets) {
+        if (!data.labels.includes(set.timestamp)) continue;
+        const needed = set.frames.filter(f => f.index !== 1).length;
+        const cached = frameCache[set.timestamp]?.length || 0;
+        if (cached === needed) continue;
+        const frames = [];
+        for (const f of set.frames) {
+          if (f.index === 1) continue;
+          const imgRes = await fetch(`/frames/${set.timestamp}/${f.index}`);
+          if (!imgRes.ok) continue;
+          const blob = await imgRes.blob();
+          frames.push({index: f.index, url: URL.createObjectURL(blob), filename: f.filename});
+        }
+        if (frames.length) {
+          frameCache[set.timestamp] = frames;
+        }
+      }
+    }
+
+    async function fetchLogs() {
+      const res = await fetch('/logs');
+      if (!res.ok) return;
+      const json = await res.json();
+      errorList.innerHTML = '';
+      json.logs.filter(l => l.level === 'error').forEach(log => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.textContent = `${log.timestamp}: ${log.message}`;
+        errorList.appendChild(li);
+      });
+    }
+
+    function showFrames(ts) {
+      const frames = frameCache[ts];
+      if (!frames) return;
+      frameWindow.innerHTML = '';
+      frames.sort((a, b) => a.index - b.index).forEach(f => {
+        const img = document.createElement('img');
+        img.src = f.url;
+        img.alt = f.filename;
+        img.title = f.filename;
+        img.className = 'img-fluid mb-2';
+        frameWindow.appendChild(img);
+      });
+    }
+
+    chart.canvas.addEventListener('mousemove', (evt) => {
+      const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
+      if (points.length) {
+        const idx = points[0].index;
+        const ts = data.labels[idx];
+        if (hoverTs === ts) return;
+        hoverTs = ts;
+        showFrames(ts);
+      } else {
+        hoverTs = null;
+        if (pinnedTs) {
+          showFrames(pinnedTs);
+        } else {
+          frameWindow.innerHTML = '';
+        }
+      }
+    });
+
+    chart.canvas.addEventListener('mouseleave', () => {
+      hoverTs = null;
+      if (pinnedTs) {
+        showFrames(pinnedTs);
+      } else {
+        frameWindow.innerHTML = '';
+      }
+    });
+
+    chart.canvas.addEventListener('click', (evt) => {
+      const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
+      if (!points.length) return;
+      const idx = points[0].index;
+      pinnedTs = data.labels[idx];
+      showFrames(pinnedTs);
+    });
+
+    fetchMetrics();
+    fetchFrame();
+    fetchLogs();
+    setInterval(fetchMetrics, 5000);
+    setInterval(fetchFrame, 5000);
+    setInterval(fetchLogs, 5000);
+    </script>
+  </body>
+</html>

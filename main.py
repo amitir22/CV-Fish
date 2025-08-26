@@ -1,181 +1,172 @@
-import sys
-import numpy as np
-import cv2 as cv
-from typing import Tuple
-from collections import deque
-from datetime import datetime
-from time import sleep
-from timer import Timer
-from metrics_extractor import extract_farneback_metric, extract_TVL1_metric, \
-                                extract_lucas_kanade_metric, extract_metrics, append_metrics
-import live_bollinger_gui
+#!/usr/bin/env python3
+"""Run the metrics extraction thread and expose a Flask REST API."""
+
+from __future__ import annotations
+
+import csv
+import glob
+import os
+import re
+import threading
+from flask import Flask, jsonify, make_response, render_template, send_file, request
+
 import cv_fish_configuration as conf
+from metrics_worker import start_metrics_thread
+
+app = Flask(__name__)
+
+# In-memory log storage for worker reports
+_logs: list[dict] = []
+_logs_lock = threading.Lock()
 
 
-def get_next_frame(video_capture_object: cv.VideoCapture, 
-                   super_pixel_shape: Tuple[int, int]=conf.DEFAULT_SUPER_PIXEL_SHAPE):
-    """
-    Getting the next frame, performing binning (applying super pixel here for enhanced performance).
-    """
-    ret, frame = video_capture_object.read()
-
-    # apply super pixel preprocessing when retrieving frame
-    if ret:
-        frame = cv.resize(frame, (frame.shape[1] // super_pixel_shape[1], 
-                                  frame.shape[0] // super_pixel_shape[0]),
-                                  interpolation=cv.INTER_LINEAR)
-
-    return ret, frame
+def _latest_csv() -> str | None:
+    files = sorted(glob.glob(os.path.join(conf.OUTPUT_DIR, '*.csv')))
+    return files[-1] if files else None
 
 
-def process_frame_window(frames: deque, metric_extractors):
-    current_timestamp = datetime.now()
+@app.route('/')
+def index():
+    """Serve the web UI."""
+    return render_template('index.html')
 
-    if len(frames) < 2:
-        raise RuntimeError("frame window size must have at least 2 frames.")
-    
-    frame1 = frames[0]   # take first frame in frame window
-    frame2 = frames[-1]  # take last frame in frame window
 
-    metrics = extract_metrics(frame1, frame2, metric_extractors)
-    
-    return metrics
+@app.get('/metrics')
+def get_all_metrics():
+    """Return all metrics from the latest CSV file."""
+    csv_path = _latest_csv()
+    if csv_path is None:
+        return jsonify({'timestamp': None, 'metrics': []})
+    with open(csv_path, newline='') as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+    ts = rows[-1]['time'] if rows else None
+    return jsonify({'timestamp': ts, 'metrics': rows})
+
+
+@app.get('/favicon.ico')
+def favicon():
+    """Avoid unnecessary 404 errors for the browser favicon request."""
+    return ('', 204)
+
+
+@app.get('/frame')
+@app.get('/frame/<timestamp>')
+def get_frame(timestamp: str | None = None):
+    """Return a frame by timestamp or the most recent one if none given."""
+    qs_ts = request.args.get('timestamp')
+    if qs_ts and re.fullmatch(r"\d{8}-\d{6}", qs_ts):
+        timestamp = qs_ts
+    elif timestamp and not re.fullmatch(r"\d{8}-\d{6}", timestamp):
+        timestamp = None
+    if timestamp:
+        pattern = os.path.join(conf.FRAMES_DIR, f'frame*-{timestamp}.png')
+        files = sorted(glob.glob(pattern))
+        if not files:
+            return ('', 404)
+        path = files[-1]
+    else:
+        if not os.path.exists(conf.LATEST_FRAME_PATH):
+            return ('', 204)
+        path = conf.LATEST_FRAME_PATH
+        timestamp = ''
+        if os.path.exists(conf.LATEST_TS_PATH):
+            with open(conf.LATEST_TS_PATH, encoding='utf-8') as fh:
+                timestamp = fh.read().strip()
+    response = make_response(send_file(path, mimetype='image/png'))
+    if timestamp:
+        response.headers['X-Data-Timestamp'] = timestamp
+    return response
+
+
+@app.get('/frames')
+def list_frame_sets():
+    """Return all timestamps that have saved frame windows."""
+    pattern = os.path.join(conf.FRAMES_DIR, 'frame*-*.png')
+    files = glob.glob(pattern)
+    timestamps = sorted({os.path.basename(p).split('-', 1)[1].rsplit('.', 1)[0] for p in files})
+    return jsonify({'timestamps': timestamps})
+
+
+@app.get('/frames/all')
+def list_all_frames():
+    """Return all frame filenames grouped by their capture timestamp."""
+    pattern = os.path.join(conf.FRAMES_DIR, 'frame*-*.png')
+    files = sorted(glob.glob(pattern))
+    grouped: dict[str, list[dict[str, int | str]]] = {}
+    for path in files:
+        base = os.path.basename(path)
+        idx_part, ts_part = base.split('-', 1)
+        ts = ts_part.rsplit('.', 1)[0]
+        idx = int(idx_part.replace('frame', ''))
+        grouped.setdefault(ts, []).append({'index': idx, 'filename': base})
+    frame_sets = [
+        {'timestamp': ts, 'frames': sorted(frames, key=lambda f: f['index'])}
+        for ts, frames in sorted(grouped.items())
+    ]
+    return jsonify({'frame_sets': frame_sets})
+
+
+@app.get('/frames/<timestamp>')
+def list_frames(timestamp: str):
+    """List frame indices available for a given capture timestamp."""
+    pattern = os.path.join(conf.FRAMES_DIR, f'frame*-{timestamp}.png')
+    files = sorted(glob.glob(pattern))
+    frames = []
+    for p in files:
+        base = os.path.basename(p)
+        idx = int(base.split('-', 1)[0].replace('frame', ''))
+        frames.append({'index': idx, 'filename': base})
+    return jsonify({'timestamp': timestamp, 'frames': frames})
+
+
+@app.get('/frames/<timestamp>/<int:index>')
+def get_frame_by_index(timestamp: str, index: int):
+    """Retrieve a specific frame image by timestamp and index."""
+    path = os.path.join(conf.FRAMES_DIR, f'frame{index}-{timestamp}.png')
+    if not os.path.exists(path):
+        return ('', 404)
+    response = make_response(send_file(path, mimetype='image/png'))
+    response.headers['X-Data-Timestamp'] = timestamp
+    return response
+
+
+@app.post('/logs')
+def post_log():
+    """Receive a log entry from the metrics worker."""
+    data = request.get_json(force=True) or {}
+    entry = {
+        'timestamp': data.get('timestamp'),
+        'level': data.get('level', 'info'),
+        'message': data.get('message', '')
+    }
+    with _logs_lock:
+        _logs.append(entry)
+    return ('', 204)
+
+
+@app.get('/logs')
+def get_logs():
+    """Return all worker log entries sorted by timestamp descending."""
+    with _logs_lock:
+        ordered = sorted(_logs, key=lambda x: x.get('timestamp', ''), reverse=True)
+    return jsonify({'logs': ordered})
 
 
 def main():
-    # is_webcam = True
-    # # If program was used:
-    # # /path> python main.py path/to/file.extension
-    # if len(sys.argv) > 1:
-    #     is_webcam = False
-    is_webcam = False
+    """Start the metrics thread and run the Flask development server."""
+    # Log the RTSP source used for frame capture so operators know
+    # exactly which stream is being consumed.
+    rtsp_path = conf.VIDEO_SOURCE['NVR']
+    print(f"Capturing frames from RTSP source: {rtsp_path}")
 
-    if is_webcam:
-        video_source = 0
-    else:  # video source is a video file
-        # video_source = sys.argv[1]
-        video_source = './Workable Data/Processed/DPH21_Above_IR10.avi'
-        
-    video_capture_object = cv.VideoCapture(video_source)
-
-    batch_size = conf.FRAME_WINDOW_SIZE  # Number of frames in the sliding window
-
-    if not video_capture_object.isOpened():
-        if is_webcam:
-            raise IOError(f"Cannot open webcam.")
-        else:
-            raise IOError(f"Cannot open video file: {video_source}.")
-
-    timer_object = Timer()
-
-    super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS  # can be modified
-    frame_window_size = conf.FRAME_WINDOW_SIZE
-
-    frame_window = deque()  # Init as deque so i can pop left with minimal overhead
-
-    for i in range(frame_window_size):
-        ret, frame = get_next_frame(video_capture_object, super_pixel_dimensions)  # Read a frame
-
-        if not ret:
-            if is_webcam:
-                print("Error: ")
-                # added a sleep() here so it won't retry in a short-circuit loop that might
-                # cause the webcam driver to cry
-                sleep(conf.WEBCAM_RETRY_INTERVAL_SECONDS)
-            else:
-                print("Error: End of video too soon")
-                break
-
-        frame_window.append(frame)
-
-    timer_object.tick()  # Start the clock
-
-    # Setup the GUI
-    chart = live_bollinger_gui.MultiBollingerChart(t_window=conf.T_WINDOW, num_std=conf.BOLLINGER_NUM_STD_OF_BANDS)
-
+    stop_event = threading.Event()
+    thread = start_metrics_thread(stop_event)
     try:
-        frame_count = frame_window_size    
-        now = timer_object.start_time
-        output_prefix = f'{now.year}-{now.month:02d}-{now.day:02d}-{now.hour:02d}-{now.minute:02d}'
-
-        if is_webcam:
-            output_suffix = 'time_sec'
-        else:  # is video file
-            output_suffix = 'frame_count'
-
-        # prepare the metric extractors
-        metric_extractors = dict()
-        metric_extractors["Lucas-Kanade"] = {
-            "kwargs": conf.DEFAULT_LUCAS_KANADE_PARAMS,
-            "function": extract_lucas_kanade_metric
-        }
-        metric_extractors["Farneback"] = {
-            "kwargs": conf.DEFAULT_FARNEBACK_PARAMS,
-            "function": extract_farneback_metric
-        }
-        metric_extractors["TVL1"] = {
-            "kwargs": conf.DEFAULT_TVL1_PARAMS,
-            "function": extract_TVL1_metric
-        }
-        # TODO: add more metric extractors here. (function: Func[frame1, frame2, params/kwargs...] => Dict)
-
-        while True:
-            ret, frame = get_next_frame(video_capture_object, super_pixel_dimensions)  # Read a frame
-
-            if not ret:
-                if is_webcam:
-                    print("Error: ")
-                    # added a sleep() here so it won't retry in a short-circuit loop that might
-                    # cause the webcam driver to cry :(
-                    sleep(conf.WEBCAM_RETRY_INTERVAL_SECONDS)
-                else: # video source is a file
-                    print("End of video")
-                    break
-
-            frame_window.popleft()
-            frame_window.append(frame)
-
-            if is_webcam:  # t-axis is elapsed seconds
-                # taking the elapsed before, so i can know the time of when the last frame was taken.
-                elapsed_seconds = timer_object.tock() // 1_000_000  # convert microsec to sec
-                elapsed_t_units = elapsed_seconds
-            else:  # If file then the t-axis is frame count
-                elapsed_t_units = frame_count
-
-            # NOTE: this is the HEAVY function
-            # metrics is now a dictionary of the form: {"varient_name": <metrics dictionary>}
-            metrics = process_frame_window(frame_window, metric_extractors)
-
-            # get flow matrix from farneback separately
-            flow = metrics["Farneback"]["flow_matrix"]
-
-            # log the metrics with the elapsed units
-            output_file_path = f'./output/{output_prefix}_{video_source.split("/")[-1][:15]}_flow_metrics_{output_suffix}.csv'
-            append_metrics(output_file_path, metrics, elapsed_t_units)
-
-            # display updating video and graph
-            data_dict = {}
-
-            # NOTE: decide which data to provide to the Bollinger chart
-
-            # # Display all metrics on the bollinger chart:
-            # for line in metric_extractors.keys():
-            #     data_dict[f'{line}_magnitude_mean'] = (metrics["Farneback"]['magnitude_mean'], metrics["Farneback"]['magnitude_deviation'])
-            #     data_dict[f'{line}_angular_mean'] = (metrics["Farneback"]['angular_mean'], metrics["Farneback"]['angular_deviation'])
-
-            # Display only the Farneback metrics to the bollinger chart:
-            data_dict["Farneback_magnitude_mean"] = (metrics["Farneback"]['magnitude_mean'], metrics["Farneback"]['magnitude_deviation'])
-
-            # Note: Doesn't work yet:
-            # data_dict["Farneback_angular_mean"] = (metrics["Farneback"]['angular_mean'], metrics["Farneback"]['angular_deviation'])
-            
-            chart.push_new_data(data_dict, frame_window[0], flow)
-
-            frame_count += 1
-
-    finally:  # release resources
-        video_capture_object.release()
-        cv.destroyAllWindows()
+        app.run(host=conf.FLASK_HOST, port=conf.FLASK_PORT)
+    finally:
+        stop_event.set()
+        thread.join()
 
 
 if __name__ == '__main__':
