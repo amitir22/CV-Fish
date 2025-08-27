@@ -2,13 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>CV-Fish Dashboard</title>
+    <title>Computer Vision Dense Flow Analysis Over Time</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/slate/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="container my-4">
-      <h1 class="mb-4 text-center">CV-Fish Live Metrics</h1>
+      <h1 class="mb-4 text-center">Computer Vision Dense Flow Analysis Over Time</h1>
       <div class="row g-4">
         <div class="col-md-8">
           <div class="card">
@@ -21,10 +21,14 @@
         <div class="col-md-4">
           <div class="card mb-4">
             <div class="card-body">
-              <img id="latestFrame" class="img-fluid mb-3" alt="Latest frame" />
-              <div id="frameWindow" class="d-flex flex-column"></div>
+              <img id="latestFrame" class="img-fluid" alt="Latest frame" />
             </div>
           </div>
+        </div>
+      </div>
+      <div class="row mt-4">
+        <div class="col">
+          <div id="frameWindow" class="d-flex flex-row flex-wrap justify-content-center"></div>
         </div>
       </div>
       <div class="row mt-4">
@@ -32,7 +36,11 @@
           <div class="card">
             <div class="card-body">
               <h2 class="h5">Worker Logs</h2>
-              <ul id="errorList" class="list-group list-group-flush"></ul>
+              <div id="logContainer"></div>
+              <div class="d-flex justify-content-between mt-2">
+                <button id="prevLogs" class="btn btn-secondary btn-sm">Previous</button>
+                <button id="nextLogs" class="btn btn-secondary btn-sm">Next</button>
+              </div>
             </div>
           </div>
         </div>
@@ -47,9 +55,9 @@
     const data = {
       labels: [],
       datasets: [
-        {label: '', data: [], borderColor: 'blue', fill: false, pointRadius: 3},
-        {label: 'Upper', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0},
-        {label: 'Lower', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0}
+        {label: '', data: [], borderColor: 'rgba(255,159,64,1)', fill: false, pointRadius: 3, pointBackgroundColor: '#4da3ff', pointBorderColor: '#4da3ff'},
+        {label: 'Upper', data: [], borderColor: 'rgba(255,159,64,0.3)', fill: false, pointRadius: 0},
+        {label: 'Lower', data: [], borderColor: 'rgba(255,159,64,0.3)', fill: false, pointRadius: 0}
       ]
     };
     const chart = new Chart(ctx, {
@@ -61,7 +69,12 @@
     const frameCache = {};
     let hoverTs = null;
     let pinnedTs = null;
-    const errorList = document.getElementById('errorList');
+    const logContainer = document.getElementById('logContainer');
+    const prevLogs = document.getElementById('prevLogs');
+    const nextLogs = document.getElementById('nextLogs');
+    const logsPerPage = 10;
+    let logs = [];
+    let currentPage = 1;
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
@@ -129,17 +142,44 @@
       }
     }
 
+    function renderLogs() {
+      logContainer.innerHTML = '';
+      const start = (currentPage - 1) * logsPerPage;
+      const pageLogs = logs.slice(start, start + logsPerPage);
+      pageLogs.forEach(log => {
+        const div = document.createElement('div');
+        let cls = 'alert alert-secondary';
+        if (log.level === 'error') cls = 'alert alert-danger';
+        else if (log.level === 'success') cls = 'alert alert-success';
+        div.className = cls;
+        div.textContent = `${log.timestamp}: ${log.message}`;
+        logContainer.appendChild(div);
+      });
+      prevLogs.disabled = currentPage === 1;
+      nextLogs.disabled = start + logsPerPage >= logs.length;
+    }
+
+    prevLogs.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderLogs();
+      }
+    });
+
+    nextLogs.addEventListener('click', () => {
+      if (currentPage * logsPerPage < logs.length) {
+        currentPage++;
+        renderLogs();
+      }
+    });
+
     async function fetchLogs() {
       const res = await fetch('/logs');
       if (!res.ok) return;
       const json = await res.json();
-      errorList.innerHTML = '';
-      json.logs.filter(l => l.level === 'error').forEach(log => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item';
-        li.textContent = `${log.timestamp}: ${log.message}`;
-        errorList.appendChild(li);
-      });
+      logs = json.logs;
+      currentPage = 1;
+      renderLogs();
     }
 
     function showFrames(ts) {
@@ -151,7 +191,7 @@
         img.src = f.url;
         img.alt = f.filename;
         img.title = f.filename;
-        img.className = 'img-fluid mb-2';
+        img.className = 'img-fluid me-2 mb-2';
         frameWindow.appendChild(img);
       });
     }
@@ -187,8 +227,18 @@
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (!points.length) return;
       const idx = points[0].index;
-      pinnedTs = data.labels[idx];
-      showFrames(pinnedTs);
+      const ts = data.labels[idx];
+      if (pinnedTs === ts) {
+        pinnedTs = null;
+        if (hoverTs) {
+          showFrames(hoverTs);
+        } else {
+          frameWindow.innerHTML = '';
+        }
+      } else {
+        pinnedTs = ts;
+        showFrames(pinnedTs);
+      }
     });
 
     fetchMetrics();
