@@ -9,6 +9,7 @@ import json
 import os
 import re
 import threading
+from typing import Any
 from flask import Flask, jsonify, make_response, render_template, send_file, request
 
 import cv_fish_configuration as conf
@@ -18,6 +19,15 @@ app = Flask(__name__)
 
 # In-memory log storage for worker reports
 LOGS_FILE = os.path.join(conf.OUTPUT_DIR, 'worker_logs.json')
+
+# Runtime-configurable settings (simple scalar values only)
+_runtime_config: dict[str, Any] = {
+    k: getattr(conf, k)
+    for k in dir(conf)
+    if k.isupper() and isinstance(getattr(conf, k), (int, float, str))
+}
+_config_types = {k: type(v) for k, v in _runtime_config.items()}
+_config_lock = threading.Lock()
 
 
 def _load_logs() -> list[dict]:
@@ -38,6 +48,28 @@ def _save_logs() -> None:
 
 _logs: list[dict] = _load_logs()
 _logs_lock = threading.Lock()
+
+
+@app.get('/config')
+def get_config():
+    """Expose current runtime configuration."""
+    with _config_lock:
+        return jsonify({'config': _runtime_config})
+
+
+@app.post('/config')
+def update_config():
+    """Update runtime configuration values."""
+    data = request.get_json(force=True) or {}
+    with _config_lock:
+        for key, val in data.items():
+            if key in _runtime_config:
+                typ = _config_types[key]
+                try:
+                    _runtime_config[key] = typ(val)
+                except Exception:
+                    pass
+    return ('', 204)
 
 
 @app.route('/')
@@ -192,7 +224,7 @@ def main():
     print(f"Capturing frames from RTSP source: {rtsp_path}")
 
     stop_event = threading.Event()
-    thread = start_metrics_thread(stop_event)
+    thread = start_metrics_thread(stop_event, _runtime_config, _config_lock)
     try:
         app.run(host=conf.FLASK_HOST, port=conf.FLASK_PORT)
     finally:
