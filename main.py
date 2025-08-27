@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import glob
+import json
 import os
 import re
 import threading
@@ -16,13 +17,27 @@ from metrics_worker import start_metrics_thread
 app = Flask(__name__)
 
 # In-memory log storage for worker reports
-_logs: list[dict] = []
+LOGS_FILE = os.path.join(conf.OUTPUT_DIR, 'worker_logs.json')
+
+
+def _load_logs() -> list[dict]:
+    if os.path.exists(LOGS_FILE):
+        with open(LOGS_FILE, encoding='utf-8') as fh:
+            try:
+                return json.load(fh)
+            except Exception:
+                return []
+    return []
+
+
+def _save_logs() -> None:
+    os.makedirs(os.path.dirname(LOGS_FILE), exist_ok=True)
+    with open(LOGS_FILE, 'w', encoding='utf-8') as fh:
+        json.dump(_logs, fh)
+
+
+_logs: list[dict] = _load_logs()
 _logs_lock = threading.Lock()
-
-
-def _latest_csv() -> str | None:
-    files = sorted(glob.glob(os.path.join(conf.OUTPUT_DIR, '*.csv')))
-    return files[-1] if files else None
 
 
 @app.route('/')
@@ -33,13 +48,21 @@ def index():
 
 @app.get('/metrics')
 def get_all_metrics():
-    """Return all metrics from the latest CSV file."""
-    csv_path = _latest_csv()
-    if csv_path is None:
-        return jsonify({'timestamp': None, 'metrics': []})
-    with open(csv_path, newline='') as fh:
-        reader = csv.DictReader(fh)
-        rows = list(reader)
+    """Return all metrics across CSV files optionally filtered by time."""
+    start = request.args.get('start')
+    end = request.args.get('end')
+    files = sorted(glob.glob(os.path.join(conf.OUTPUT_DIR, '*.csv')))
+    rows: list[dict] = []
+    for path in files:
+        with open(path, newline='') as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                ts = row.get('time', '')
+                if start and ts < start:
+                    continue
+                if end and ts > end:
+                    continue
+                rows.append(row)
     ts = rows[-1]['time'] if rows else None
     return jsonify({'timestamp': ts, 'metrics': rows})
 
@@ -142,14 +165,22 @@ def post_log():
     }
     with _logs_lock:
         _logs.append(entry)
+        _save_logs()
     return ('', 204)
 
 
 @app.get('/logs')
 def get_logs():
-    """Return all worker log entries sorted by timestamp descending."""
+    """Return worker log entries sorted by timestamp descending."""
+    start = request.args.get('start')
+    end = request.args.get('end')
     with _logs_lock:
-        ordered = sorted(_logs, key=lambda x: x.get('timestamp', ''), reverse=True)
+        filtered = [
+            l for l in _logs
+            if (not start or l.get('timestamp', '') >= start)
+            and (not end or l.get('timestamp', '') <= end)
+        ]
+        ordered = sorted(filtered, key=lambda x: x.get('timestamp', ''), reverse=True)
     return jsonify({'logs': ordered})
 
 

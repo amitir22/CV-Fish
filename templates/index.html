@@ -19,6 +19,16 @@
           <div class="card">
             <div class="card-body">
               <select id="metricSelect" class="form-select mb-3"></select>
+              <div class="d-flex mb-2">
+                <input type="datetime-local" id="startDate" class="form-control me-2" />
+                <input type="datetime-local" id="endDate" class="form-control me-2" />
+                <button id="applyRange" class="btn btn-primary btn-sm">Apply</button>
+              </div>
+              <select id="chartView" class="form-select mb-3">
+                <option value="all">All view</option>
+                <option value="daily">Daily view</option>
+                <option value="weekly">Weekly view</option>
+              </select>
               <canvas id="metricChart"></canvas>
             </div>
           </div>
@@ -41,6 +51,11 @@
           <div class="card">
             <div class="card-body">
               <h2 class="h5">Worker Logs</h2>
+              <select id="logView" class="form-select mb-3">
+                <option value="all">All view</option>
+                <option value="daily">Daily view</option>
+                <option value="weekly">Weekly view</option>
+              </select>
               <div id="logContainer"></div>
               <div class="d-flex justify-content-between mt-2">
                 <button id="prevLogs" class="btn btn-secondary btn-sm">Previous</button>
@@ -80,6 +95,25 @@
     const logsPerPage = 10;
     let logs = [];
     let currentPage = 1;
+    const startInput = document.getElementById('startDate');
+    const endInput = document.getElementById('endDate');
+    const applyRange = document.getElementById('applyRange');
+    const chartView = document.getElementById('chartView');
+    let rangeStart = null;
+    let rangeEnd = null;
+    const logView = document.getElementById('logView');
+    let logRangeStart = null;
+    let logRangeEnd = null;
+
+    function formatTs(d) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+
+    function formatInput(d) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
@@ -87,7 +121,12 @@
     });
 
     async function fetchMetrics() {
-      const res = await fetch('/metrics');
+      let url = '/metrics';
+      const params = new URLSearchParams();
+      if (rangeStart) params.append('start', formatTs(rangeStart));
+      if (rangeEnd) params.append('end', formatTs(rangeEnd));
+      if ([...params].length) url += `?${params.toString()}`;
+      const res = await fetch(url);
       const json = await res.json();
       const rows = json.metrics;
       const unique = Array.from(new Set(rows.map(r => `${r.pair}_${r.metric_name}`)));
@@ -179,13 +218,60 @@
     });
 
     async function fetchLogs() {
-      const res = await fetch('/logs');
+      let url = '/logs';
+      const params = new URLSearchParams();
+      if (logRangeStart) params.append('start', formatTs(logRangeStart));
+      if (logRangeEnd) params.append('end', formatTs(logRangeEnd));
+      if ([...params].length) url += `?${params.toString()}`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
       logs = json.logs;
       currentPage = 1;
       renderLogs();
     }
+
+    applyRange.addEventListener('click', () => {
+      rangeStart = startInput.value ? new Date(startInput.value) : null;
+      rangeEnd = endInput.value ? new Date(endInput.value) : null;
+      fetchMetrics();
+    });
+
+    chartView.addEventListener('change', () => {
+      const now = new Date();
+      if (chartView.value === 'daily') {
+        rangeStart = new Date(now.getTime() - 24*60*60*1000);
+        rangeEnd = now;
+        startInput.value = formatInput(rangeStart);
+        endInput.value = formatInput(rangeEnd);
+      } else if (chartView.value === 'weekly') {
+        rangeStart = new Date(now.getTime() - 7*24*60*60*1000);
+        rangeEnd = now;
+        startInput.value = formatInput(rangeStart);
+        endInput.value = formatInput(rangeEnd);
+      } else {
+        rangeStart = null;
+        rangeEnd = null;
+        startInput.value = '';
+        endInput.value = '';
+      }
+      fetchMetrics();
+    });
+
+    logView.addEventListener('change', () => {
+      const now = new Date();
+      if (logView.value === 'daily') {
+        logRangeStart = new Date(now.getTime() - 24*60*60*1000);
+        logRangeEnd = now;
+      } else if (logView.value === 'weekly') {
+        logRangeStart = new Date(now.getTime() - 7*24*60*60*1000);
+        logRangeEnd = now;
+      } else {
+        logRangeStart = null;
+        logRangeEnd = null;
+      }
+      fetchLogs();
+    });
 
     function showFrames(ts) {
       const frames = frameCache[ts];
