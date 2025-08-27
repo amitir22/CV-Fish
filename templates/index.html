@@ -152,28 +152,28 @@
     const metricSelect = document.getElementById('metricSelect');
     let selectedMetric = null;
     const ctx = document.getElementById('metricChart').getContext('2d');
-    const data = {
-      labels: [],
-      datasets: [
-        {label: '', data: [], borderColor: colors.line, fill: false, pointRadius: 3, pointBackgroundColor: colors.dots, pointBorderColor: colors.dots},
-        {label: 'Upper', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0},
-        {label: 'Lower', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0}
-      ]
-    };
     const chart = new Chart(ctx, {
       type: 'line',
-      data,
+      data: {
+        labels: [],
+        datasets: [
+          {label: '', data: [], borderColor: colors.line, fill: false, pointRadius: 3, pointBackgroundColor: colors.dots, pointBorderColor: colors.dots},
+          {label: 'Upper', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0},
+          {label: 'Lower', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0}
+        ]
+      },
       options: {animation: false, plugins: {title: {display: true, text: ''}}}
     });
 
     function applyColors() {
       document.body.style.backgroundColor = colors.background;
-      data.datasets[0].borderColor = colors.line;
-      data.datasets[0].pointBackgroundColor = colors.dots;
-      data.datasets[0].pointBorderColor = colors.dots;
+      const ds = chart.data.datasets;
+      ds[0].borderColor = colors.line;
+      ds[0].pointBackgroundColor = colors.dots;
+      ds[0].pointBorderColor = colors.dots;
       const band = hexToRgba(colors.band,0.3);
-      data.datasets[1].borderColor = band;
-      data.datasets[2].borderColor = band;
+      ds[1].borderColor = band;
+      ds[2].borderColor = band;
       chart.update();
     }
     applyColors();
@@ -241,14 +241,14 @@
       const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
       if (filtered.length) {
         const label = selectedMetric.replace('_', ' ');
-        data.labels = filtered.map(r => r.time);
+        chart.data.labels = filtered.map(r => r.time);
         const values = filtered.map(r => parseFloat(r.magnitude_mean));
         const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
-        data.datasets[0].label = label;
+        chart.data.datasets[0].label = label;
         chart.options.plugins.title.text = label;
-        data.datasets[0].data = values;
-        data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
-        data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
+        chart.data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
         chart.update();
       }
       await preloadFrames();
@@ -266,7 +266,7 @@
       if (!res.ok) return;
       const json = await res.json();
       for (const set of json.frame_sets) {
-        if (!data.labels.includes(set.timestamp)) continue;
+        if (!chart.data.labels.includes(set.timestamp)) continue;
         const needed = set.frames.filter(f => f.index !== 1).length;
         const cached = frameCache[set.timestamp]?.length || 0;
         if (cached === needed) continue;
@@ -443,7 +443,7 @@
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (points.length) {
         const idx = points[0].index;
-        const ts = data.labels[idx];
+        const ts = chart.data.labels[idx];
         if (hoverTs === ts) return;
         hoverTs = ts;
         showFrames(ts);
@@ -470,7 +470,7 @@
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (!points.length) return;
       const idx = points[0].index;
-      const ts = data.labels[idx];
+      const ts = chart.data.labels[idx];
       if (pinnedTs === ts) {
         pinnedTs = null;
         if (hoverTs) {
