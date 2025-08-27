@@ -28,7 +28,7 @@
               <div class="d-flex mb-2">
                 <input type="datetime-local" id="startDate" class="form-control me-2" />
                 <input type="datetime-local" id="endDate" class="form-control me-2" />
-                <button id="applyRange" class="btn btn-primary btn-sm">Apply</button>
+                <button id="applyRange" type="button" class="btn btn-primary btn-sm">Apply</button>
               </div>
               <select id="chartView" class="form-select mb-3">
                 <option value="all">All view</option>
@@ -329,7 +329,8 @@
       renderLogs();
     }
 
-    applyRange.addEventListener('click', () => {
+    applyRange.addEventListener('click', (e) => {
+      e.preventDefault();
       rangeStart = startInput.value ? new Date(startInput.value) : null;
       rangeEnd = endInput.value ? new Date(endInput.value) : null;
       fetchMetrics();
