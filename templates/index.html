@@ -5,6 +5,11 @@
     <title>Computer Vision Dense Flow Analysis Over Time</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/slate/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      #frameWindow img {
+        height: 100px;
+      }
+    </style>
   </head>
   <body>
     <div class="container my-4">
@@ -28,7 +33,7 @@
       </div>
       <div class="row mt-4">
         <div class="col">
-          <div id="frameWindow" class="d-flex flex-row flex-wrap justify-content-center"></div>
+          <div id="frameWindow" class="d-flex flex-row flex-nowrap overflow-auto justify-content-center"></div>
         </div>
       </div>
       <div class="row mt-4">
@@ -191,7 +196,7 @@
         img.src = f.url;
         img.alt = f.filename;
         img.title = f.filename;
-        img.className = 'img-fluid me-2 mb-2';
+        img.className = 'me-2';
         frameWindow.appendChild(img);
       });
     }
