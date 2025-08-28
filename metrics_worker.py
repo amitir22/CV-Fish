@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 from datetime import datetime
-from typing import Tuple
+from typing import Tuple, Any
 
 import cv2 as cv
 import requests
@@ -115,7 +115,7 @@ def _prepare_output_paths():
             open(path, 'a', encoding='utf-8').close()
 
 
-def _metrics_loop(stop_event: threading.Event):
+def _metrics_loop(stop_event: threading.Event, runtime_cfg: dict[str, Any], cfg_lock: threading.Lock):
     """Continuously capture frames and update CSV/image outputs."""
     _prepare_output_paths()
 
@@ -128,9 +128,6 @@ def _metrics_loop(stop_event: threading.Event):
         video_source = conf.VIDEO_SOURCE['NVR']
     else:
         video_source = conf.VIDEO_SOURCE['FILE']
-
-    super_pixel_dimensions = conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS
-    capture_interval = conf.CAPTURE_INTERVAL_MINUTES * 60
 
     metric_extractors = {
         'Lucas-Kanade': {
@@ -148,11 +145,17 @@ def _metrics_loop(stop_event: threading.Event):
     }
 
     while not stop_event.is_set():
+        with cfg_lock:
+            frame_window_size = runtime_cfg.get('FRAME_WINDOW_SIZE', conf.FRAME_WINDOW_SIZE)
+            capture_interval_minutes = runtime_cfg.get('CAPTURE_INTERVAL_MINUTES', conf.CAPTURE_INTERVAL_MINUTES)
+            super_pixel_dimensions = runtime_cfg.get('DEFAULT_SUPER_PIXEL_DIMEMSNIONS', conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS)
+        capture_interval = capture_interval_minutes * 60
+
         try:
-            frames = _capture_sample(video_source, conf.FRAME_WINDOW_SIZE, super_pixel_dimensions)
+            frames = _capture_sample(video_source, frame_window_size, super_pixel_dimensions)
             now = datetime.now()
             time_stamp = now.strftime(conf.TIMESTAMP_FORMAT)
-            if len(frames) < conf.FRAME_WINDOW_SIZE:
+            if len(frames) < frame_window_size:
                 _post_log('error', 'insufficient frames captured', time_stamp)
                 stop_event.wait(capture_interval)
                 continue
@@ -161,7 +164,7 @@ def _metrics_loop(stop_event: threading.Event):
             output_file_path = os.path.join(conf.OUTPUT_DIR, f'{date_str}.csv')
 
             flows = []
-            for idx in range(1, conf.FRAME_WINDOW_SIZE):
+            for idx in range(1, frame_window_size):
                 metrics = extract_metrics(frames[0], frames[idx], metric_extractors)
                 pair_label = f'1-{idx+1}'
                 append_metrics(output_file_path, metrics, time_stamp, pair_label)
@@ -176,9 +179,15 @@ def _metrics_loop(stop_event: threading.Event):
         stop_event.wait(capture_interval)
 
 
-def start_metrics_thread(stop_event: threading.Event) -> threading.Thread:
+def start_metrics_thread(stop_event: threading.Event,
+                        runtime_cfg: dict[str, Any],
+                        cfg_lock: threading.Lock) -> threading.Thread:
     """Start the metrics extraction thread."""
-    thread = threading.Thread(target=_metrics_loop, args=(stop_event,), daemon=True)
+    thread = threading.Thread(
+        target=_metrics_loop,
+        args=(stop_event, runtime_cfg, cfg_lock),
+        daemon=True,
+    )
     thread.start()
     return thread
 
