@@ -176,7 +176,6 @@
       ds[2].borderColor = band;
       chart.update();
     }
-    applyColors();
     const frameWindow = document.getElementById('frameWindow');
     const frameCache = {};
     let hoverTs = null;
@@ -203,6 +202,39 @@
     const paletteModalEl = document.getElementById('paletteModal');
     const colorForm = document.getElementById('colorForm');
 
+    const stateKey = 'cvfish_state';
+    function loadState() {
+      try { return JSON.parse(localStorage.getItem(stateKey) || '{}'); }
+      catch { return {}; }
+    }
+    function saveState() {
+      localStorage.setItem(stateKey, JSON.stringify({
+        selectedMetric,
+        chartView: chartView.value,
+        logView: logView.value,
+        currentPage,
+        rangeStart: rangeStart ? rangeStart.toISOString() : null,
+        rangeEnd: rangeEnd ? rangeEnd.toISOString() : null,
+        logRangeStart: logRangeStart ? logRangeStart.toISOString() : null,
+        logRangeEnd: logRangeEnd ? logRangeEnd.toISOString() : null,
+        colors
+      }));
+    }
+    const saved = loadState();
+    if (saved.colors) { Object.assign(colors, saved.colors); }
+    selectedMetric = saved.selectedMetric || null;
+    chartView.value = saved.chartView || 'all';
+    logView.value = saved.logView || 'all';
+    currentPage = saved.currentPage || 1;
+    rangeStart = saved.rangeStart ? new Date(saved.rangeStart) : null;
+    rangeEnd = saved.rangeEnd ? new Date(saved.rangeEnd) : null;
+    logRangeStart = saved.logRangeStart ? new Date(saved.logRangeStart) : null;
+    logRangeEnd = saved.logRangeEnd ? new Date(saved.logRangeEnd) : null;
+    if (rangeStart) startInput.value = formatInput(rangeStart);
+    if (rangeEnd) endInput.value = formatInput(rangeEnd);
+
+    applyColors();
+
     function formatTs(d) {
       const pad = n => n.toString().padStart(2, '0');
       return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
@@ -215,6 +247,7 @@
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
+      saveState();
       fetchMetrics();
     });
 
@@ -237,6 +270,7 @@
           metricSelect.appendChild(opt);
         });
         metricSelect.value = selectedMetric;
+        saveState();
       }
       const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
       if (filtered.length) {
@@ -305,6 +339,7 @@
       if (currentPage > 1) {
         currentPage--;
         renderLogs();
+        saveState();
       }
     });
 
@@ -312,6 +347,7 @@
       if (currentPage * logsPerPage < logs.length) {
         currentPage++;
         renderLogs();
+        saveState();
       }
     });
 
@@ -325,14 +361,17 @@
       if (!res.ok) return;
       const json = await res.json();
       logs = json.logs;
-      currentPage = 1;
+      const totalPages = Math.max(1, Math.ceil(logs.length / logsPerPage));
+      if (currentPage > totalPages) currentPage = totalPages;
       renderLogs();
+      saveState();
     }
 
     applyRange.addEventListener('click', (e) => {
       e.preventDefault();
       rangeStart = startInput.value ? new Date(startInput.value) : null;
       rangeEnd = endInput.value ? new Date(endInput.value) : null;
+      saveState();
       fetchMetrics();
     });
 
@@ -354,6 +393,7 @@
         startInput.value = '';
         endInput.value = '';
       }
+      saveState();
       fetchMetrics();
     });
 
@@ -369,6 +409,7 @@
         logRangeStart = null;
         logRangeEnd = null;
       }
+      saveState();
       fetchLogs();
     });
 
@@ -404,6 +445,7 @@
         body: JSON.stringify(data)
       });
       bootstrap.Modal.getInstance(configModalEl).hide();
+      saveState();
       location.reload();
     });
 
@@ -422,6 +464,7 @@
       colors.line = colorForm.lineColor.value;
       colors.band = colorForm.bandColor.value;
       applyColors();
+      saveState();
       bootstrap.Modal.getInstance(paletteModalEl).hide();
     });
 
