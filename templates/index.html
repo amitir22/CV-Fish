@@ -17,11 +17,12 @@
     <div class="container my-4">
       <h1 class="mb-4 text-center">Computer Vision Dense Flow Analysis Over Time</h1>
       <div class="text-end mb-3">
+        <button id="videoBtn" class="btn btn-outline-light btn-sm me-2">Analyze Video</button>
         <button id="configBtn" class="btn btn-outline-light btn-sm me-2">Configuration</button>
         <button id="paletteBtn" class="btn btn-outline-light btn-sm"><i class="bi bi-palette"></i></button>
       </div>
       <div class="row g-4">
-        <div class="col-md-8">
+        <div class="col-12 col-lg-8">
           <div class="card">
             <div class="card-body">
               <select id="metricSelect" class="form-select mb-3"></select>
@@ -39,7 +40,7 @@
             </div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-12 col-lg-4">
           <div class="card mb-4">
             <div class="card-body">
               <img id="latestFrame" class="img-fluid" alt="Latest frame" />
@@ -48,12 +49,12 @@
         </div>
       </div>
       <div class="row mt-4">
-        <div class="col">
+        <div class="col-12">
           <div id="frameWindow" class="d-flex flex-row flex-nowrap overflow-auto justify-content-center"></div>
         </div>
       </div>
       <div class="row mt-4">
-        <div class="col">
+        <div class="col-12">
           <div class="card">
             <div class="card-body">
               <h2 class="h5">Worker Logs</h2>
@@ -69,6 +70,27 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Video Upload Modal -->
+    <div class="modal fade" id="videoModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Analyze Video File</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="videoForm" enctype="multipart/form-data">
+            <div class="modal-body">
+              <input type="file" name="video" accept="video/*" class="form-control" />
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary">Run</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -195,12 +217,16 @@
     const logView = document.getElementById('logView');
     let logRangeStart = null;
     let logRangeEnd = null;
+    let fileMode = false;
     const configBtn = document.getElementById('configBtn');
     const configModalEl = document.getElementById('configModal');
     const configForm = document.getElementById('configForm');
     const paletteBtn = document.getElementById('paletteBtn');
     const paletteModalEl = document.getElementById('paletteModal');
     const colorForm = document.getElementById('colorForm');
+    const videoBtn = document.getElementById('videoBtn');
+    const videoModalEl = document.getElementById('videoModal');
+    const videoForm = document.getElementById('videoForm');
 
     const stateKey = 'cvfish_state';
     function loadState() {
@@ -252,6 +278,7 @@
     });
 
     async function fetchMetrics() {
+      if (fileMode) return;
       let url = '/metrics';
       const params = new URLSearchParams();
       if (rangeStart) params.append('start', formatTs(rangeStart));
@@ -413,32 +440,59 @@
       fetchLogs();
     });
 
+    function renderConfig(parent, obj, path='') {
+      Object.entries(obj).forEach(([key, val]) => {
+        const full = path ? `${path}.${key}` : key;
+        if (val && typeof val === 'object') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mb-2';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-sm btn-secondary';
+          btn.textContent = `+ ${key}`;
+          const child = document.createElement('div');
+          child.className = 'ms-3 d-none';
+          btn.addEventListener('click', () => child.classList.toggle('d-none'));
+          wrapper.appendChild(btn);
+          wrapper.appendChild(child);
+          parent.appendChild(wrapper);
+          renderConfig(child, val, full);
+        } else {
+          const div = document.createElement('div');
+          div.className = 'mb-3';
+          const label = document.createElement('label');
+          label.className = 'form-label';
+          label.textContent = full;
+          const input = document.createElement('input');
+          input.className = 'form-control';
+          input.name = full;
+          input.value = val;
+          div.appendChild(label);
+          div.appendChild(input);
+          parent.appendChild(div);
+        }
+      });
+    }
+
     configBtn.addEventListener('click', async () => {
       const res = await fetch('/config');
       const json = await res.json();
       const body = configForm.querySelector('.modal-body');
       body.innerHTML = '';
-      for (const [key, val] of Object.entries(json.config)) {
-        const div = document.createElement('div');
-        div.className = 'mb-3';
-        const label = document.createElement('label');
-        label.className = 'form-label';
-        label.textContent = key;
-        const input = document.createElement('input');
-        input.className = 'form-control';
-        input.name = key;
-        input.value = val;
-        div.appendChild(label);
-        div.appendChild(input);
-        body.appendChild(div);
-      }
+      renderConfig(body, json.config);
       new bootstrap.Modal(configModalEl).show();
     });
 
     configForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = {};
-      new FormData(configForm).forEach((v,k) => data[k] = v);
+      new FormData(configForm).forEach((v, k) => {
+        k.split('.').reduce((acc, part, i, arr) => {
+          if (i === arr.length - 1) acc[part] = v;
+          else acc[part] = acc[part] || {};
+          return acc[part];
+        }, data);
+      });
       await fetch('/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -466,6 +520,44 @@
       applyColors();
       saveState();
       bootstrap.Modal.getInstance(paletteModalEl).hide();
+    });
+
+    videoBtn.addEventListener('click', () => {
+      videoForm.reset();
+      new bootstrap.Modal(videoModalEl).show();
+    });
+
+    videoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(videoForm);
+      const res = await fetch('/analyze', {method: 'POST', body: fd});
+      if (!res.ok) return;
+      const json = await res.json();
+      const rows = json.metrics || [];
+      fileMode = true;
+      metricSelect.innerHTML = '';
+      const unique = [...new Set(rows.map(r => `${r.pair}_${r.metric_name}`))];
+      unique.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name.replace('_', ' ');
+        metricSelect.appendChild(opt);
+      });
+      selectedMetric = unique[0] || null;
+      if (selectedMetric) {
+        const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
+        const label = selectedMetric.replace('_', ' ');
+        chart.data.labels = filtered.map(r => r.time);
+        const values = filtered.map(r => parseFloat(r.magnitude_mean));
+        const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
+        chart.data.datasets[0].label = label;
+        chart.options.plugins.title.text = label;
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[1].data = values.map((v,i) => v + numStd * stds[i]);
+        chart.data.datasets[2].data = values.map((v,i) => v - numStd * stds[i]);
+        chart.update();
+      }
+      bootstrap.Modal.getInstance(videoModalEl).hide();
     });
 
     function showFrames(ts) {

@@ -9,10 +9,20 @@ import json
 import os
 import re
 import threading
+import tempfile
+from collections import deque
 from typing import Any
+
+import cv2 as cv
 from flask import Flask, jsonify, make_response, render_template, send_file, request
 
 import cv_fish_configuration as conf
+from metrics_extractor import (
+    extract_metrics,
+    extract_farneback_metric,
+    extract_TVL1_metric,
+    extract_lucas_kanade_metric,
+)
 from metrics_worker import start_metrics_thread
 
 app = Flask(__name__)
@@ -20,13 +30,29 @@ app = Flask(__name__)
 # In-memory log storage for worker reports
 LOGS_FILE = os.path.join(conf.OUTPUT_DIR, 'worker_logs.json')
 
-# Runtime-configurable settings (simple scalar values only)
+# Runtime-configurable settings including nested dictionaries
+
+
+def _deep_copy(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _deep_copy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_deep_copy(v) for v in obj)
+    return obj
+
+
+def _type_map(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _type_map(v) for k, v in obj.items()}
+    return type(obj)
+
+
 _runtime_config: dict[str, Any] = {
-    k: getattr(conf, k)
+    k: _deep_copy(getattr(conf, k))
     for k in dir(conf)
-    if k.isupper() and isinstance(getattr(conf, k), (int, float, str))
+    if k.isupper()
 }
-_config_types = {k: type(v) for k, v in _runtime_config.items()}
+_config_types = {k: _type_map(v) for k, v in _runtime_config.items()}
 _config_lock = threading.Lock()
 
 
@@ -61,14 +87,22 @@ def get_config():
 def update_config():
     """Update runtime configuration values."""
     data = request.get_json(force=True) or {}
-    with _config_lock:
-        for key, val in data.items():
-            if key in _runtime_config:
-                typ = _config_types[key]
+
+    def _apply(cfg: dict, types: dict, updates: dict) -> None:
+        for k, v in updates.items():
+            if k not in cfg:
+                continue
+            if isinstance(cfg[k], dict) and isinstance(v, dict):
+                _apply(cfg[k], types.get(k, {}), v)
+            else:
+                typ = types.get(k, type(cfg[k]))
                 try:
-                    _runtime_config[key] = typ(val)
+                    cfg[k] = typ(v)
                 except Exception:
                     pass
+
+    with _config_lock:
+        _apply(_runtime_config, _config_types, data)
     return ('', 204)
 
 
@@ -97,6 +131,97 @@ def get_all_metrics():
                 rows.append(row)
     ts = rows[-1]['time'] if rows else None
     return jsonify({'timestamp': ts, 'metrics': rows})
+
+
+def _process_video(path: str) -> list[dict]:
+    """Analyse a video file in one pass and return metric rows."""
+    with _config_lock:
+        frame_window = _runtime_config.get('FRAME_WINDOW_SIZE', conf.FRAME_WINDOW_SIZE)
+        sp = _runtime_config.get('DEFAULT_SUPER_PIXEL_DIMEMSNIONS', conf.DEFAULT_SUPER_PIXEL_DIMEMSNIONS)
+
+    metric_extractors = {
+        'Lucas-Kanade': {
+            'kwargs': conf.DEFAULT_LUCAS_KANADE_PARAMS,
+            'function': extract_lucas_kanade_metric
+        },
+        'Farneback': {
+            'kwargs': conf.DEFAULT_FARNEBACK_PARAMS,
+            'function': extract_farneback_metric
+        },
+        'TVL1': {
+            'kwargs': conf.DEFAULT_TVL1_PARAMS,
+            'function': extract_TVL1_metric
+        },
+    }
+
+    cap = cv.VideoCapture(path)
+    frames: deque = deque(maxlen=frame_window)
+    rows: list[dict] = []
+    idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame = cv.resize(
+            frame,
+            (frame.shape[1] // sp[1], frame.shape[0] // sp[0]),
+            interpolation=cv.INTER_LINEAR,
+        )
+        frames.append(frame)
+        if len(frames) < frame_window:
+            continue
+        ts = f"file-{idx:06d}"
+        for j in range(1, frame_window):
+            metrics = extract_metrics(frames[0], frames[j], metric_extractors)
+            for name, vals in metrics.items():
+                rows.append({
+                    'pair': f'1-{j+1}',
+                    'metric_name': name,
+                    'time': ts,
+                    'magnitude_mean': vals['magnitude_mean'],
+                    'magnitude_deviation': vals['magnitude_deviation'],
+                    'angular_deviation': vals['angular_deviation'],
+                    'angular_mean': vals['angular_mean'],
+                })
+        idx += 1
+    cap.release()
+
+    out_dir = os.path.join(conf.OUTPUT_DIR, 'video_analysis')
+    os.makedirs(out_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(path))[0]
+    csv_path = os.path.join(out_dir, f'{base}.csv')
+    if rows:
+        with open(csv_path, 'w', newline='') as fh:
+            writer = csv.writer(fh)
+            writer.writerow([
+                'pair', 'metric_name', 'time', 'magnitude_mean',
+                'magnitude_deviation', 'angular_deviation', 'angular_mean'
+            ])
+            for r in rows:
+                writer.writerow([
+                    r['pair'], r['metric_name'], r['time'],
+                    r['magnitude_mean'], r['magnitude_deviation'],
+                    r['angular_deviation'], r['angular_mean']
+                ])
+    return rows
+
+
+@app.post('/analyze')
+def analyze_video():
+    """Accept a video file upload and return analysed metrics."""
+    if 'video' not in request.files:
+        return ('', 400)
+    file = request.files['video']
+    if not file.filename:
+        return ('', 400)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1])
+    try:
+        file.save(tmp.name)
+        rows = _process_video(tmp.name)
+    finally:
+        tmp.close()
+        os.unlink(tmp.name)
+    return jsonify({'metrics': rows})
 
 
 @app.get('/favicon.ico')
