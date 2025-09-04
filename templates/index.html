@@ -2,74 +2,289 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>CV-Fish Dashboard</title>
+    <title>Computer Vision Dense Flow Analysis Over Time</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/slate/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+      #frameWindow img {
+        height: 220px;
+      }
+    </style>
   </head>
   <body>
     <div class="container my-4">
-      <h1 class="mb-4 text-center">CV-Fish Live Metrics</h1>
+      <h1 class="mb-4 text-center">Computer Vision Dense Flow Analysis Over Time</h1>
+      <div class="text-end mb-3">
+        <button id="videoBtn" class="btn btn-outline-light btn-sm me-2">Analyze Video</button>
+        <button id="configBtn" class="btn btn-outline-light btn-sm me-2">Configuration</button>
+        <button id="paletteBtn" class="btn btn-outline-light btn-sm"><i class="bi bi-palette"></i></button>
+      </div>
       <div class="row g-4">
-        <div class="col-md-8">
+        <div class="col-12 col-lg-8">
           <div class="card">
             <div class="card-body">
               <select id="metricSelect" class="form-select mb-3"></select>
+              <div class="d-flex mb-2">
+                <input type="datetime-local" id="startDate" class="form-control me-2" />
+                <input type="datetime-local" id="endDate" class="form-control me-2" />
+                <button id="applyRange" type="button" class="btn btn-primary btn-sm">Apply</button>
+              </div>
+              <select id="chartView" class="form-select mb-3">
+                <option value="all">All view</option>
+                <option value="daily">Daily view</option>
+                <option value="weekly">Weekly view</option>
+              </select>
               <canvas id="metricChart"></canvas>
             </div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-12 col-lg-4">
           <div class="card mb-4">
             <div class="card-body">
-              <img id="latestFrame" class="img-fluid mb-3" alt="Latest frame" />
-              <div id="frameWindow" class="d-flex flex-column"></div>
+              <img id="latestFrame" class="img-fluid" alt="Latest frame" />
             </div>
           </div>
         </div>
       </div>
       <div class="row mt-4">
-        <div class="col">
+        <div class="col-12">
+          <div id="frameWindow" class="d-flex flex-row flex-nowrap overflow-auto justify-content-center"></div>
+        </div>
+      </div>
+      <div class="row mt-4">
+        <div class="col-12">
           <div class="card">
             <div class="card-body">
               <h2 class="h5">Worker Logs</h2>
-              <ul id="errorList" class="list-group list-group-flush"></ul>
+              <select id="logView" class="form-select mb-3">
+                <option value="all">All view</option>
+                <option value="daily">Daily view</option>
+                <option value="weekly">Weekly view</option>
+              </select>
+              <div id="logContainer"></div>
+              <div class="d-flex justify-content-between mt-2">
+                <button id="prevLogs" class="btn btn-secondary btn-sm">Previous</button>
+                <button id="nextLogs" class="btn btn-secondary btn-sm">Next</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Video Upload Modal -->
+    <div class="modal fade" id="videoModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Analyze Video File</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="videoForm" enctype="multipart/form-data">
+            <div class="modal-body">
+              <input type="file" name="video" accept="video/*" class="form-control" />
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary">Run</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div class="modal fade" id="configModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Configuration</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="configForm">
+            <div class="modal-body"></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Palette Modal -->
+    <div class="modal fade" id="paletteModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Color Palette</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="colorForm">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Background</label>
+                <input type="color" name="bgColor" class="form-control form-control-color" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Dots</label>
+                <input type="color" name="dotsColor" class="form-control form-control-color" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Main Graph</label>
+                <input type="color" name="lineColor" class="form-control form-control-color" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Bollinger Bands</label>
+                <input type="color" name="bandColor" class="form-control form-control-color" />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary">Apply</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <script>
+    function rgbToHex(rgb) {
+      const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!m) return '#000000';
+      return '#' + [m[1], m[2], m[3]].map(x => parseInt(x).toString(16).padStart(2,'0')).join('');
+    }
+    function hexToRgba(hex, alpha) {
+      const r = parseInt(hex.slice(1,3),16);
+      const g = parseInt(hex.slice(3,5),16);
+      const b = parseInt(hex.slice(5,7),16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    const colors = {
+      background: rgbToHex(getComputedStyle(document.body).backgroundColor),
+      dots: '#4da3ff',
+      line: '#ff9f40',
+      band: '#ff9f40'
+    };
+
     const numStd = 2;
     const metricSelect = document.getElementById('metricSelect');
     let selectedMetric = null;
     const ctx = document.getElementById('metricChart').getContext('2d');
-    const data = {
-      labels: [],
-      datasets: [
-        {label: '', data: [], borderColor: 'blue', fill: false, pointRadius: 3},
-        {label: 'Upper', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0},
-        {label: 'Lower', data: [], borderColor: 'rgba(0,0,255,0.3)', fill: false, pointRadius: 0}
-      ]
-    };
     const chart = new Chart(ctx, {
       type: 'line',
-      data,
+      data: {
+        labels: [],
+        datasets: [
+          {label: '', data: [], borderColor: colors.line, fill: false, pointRadius: 3, pointBackgroundColor: colors.dots, pointBorderColor: colors.dots},
+          {label: 'Upper', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0},
+          {label: 'Lower', data: [], borderColor: hexToRgba(colors.band,0.3), fill: false, pointRadius: 0}
+        ]
+      },
       options: {animation: false, plugins: {title: {display: true, text: ''}}}
     });
+
+    function applyColors() {
+      document.body.style.backgroundColor = colors.background;
+      const ds = chart.data.datasets;
+      ds[0].borderColor = colors.line;
+      ds[0].pointBackgroundColor = colors.dots;
+      ds[0].pointBorderColor = colors.dots;
+      const band = hexToRgba(colors.band,0.3);
+      ds[1].borderColor = band;
+      ds[2].borderColor = band;
+      chart.update();
+    }
     const frameWindow = document.getElementById('frameWindow');
     const frameCache = {};
     let hoverTs = null;
     let pinnedTs = null;
-    const errorList = document.getElementById('errorList');
+    const logContainer = document.getElementById('logContainer');
+    const prevLogs = document.getElementById('prevLogs');
+    const nextLogs = document.getElementById('nextLogs');
+    const logsPerPage = 10;
+    let logs = [];
+    let currentPage = 1;
+    const startInput = document.getElementById('startDate');
+    const endInput = document.getElementById('endDate');
+    const applyRange = document.getElementById('applyRange');
+    const chartView = document.getElementById('chartView');
+    let rangeStart = null;
+    let rangeEnd = null;
+    const logView = document.getElementById('logView');
+    let logRangeStart = null;
+    let logRangeEnd = null;
+    let fileMode = false;
+    const configBtn = document.getElementById('configBtn');
+    const configModalEl = document.getElementById('configModal');
+    const configForm = document.getElementById('configForm');
+    const paletteBtn = document.getElementById('paletteBtn');
+    const paletteModalEl = document.getElementById('paletteModal');
+    const colorForm = document.getElementById('colorForm');
+    const videoBtn = document.getElementById('videoBtn');
+    const videoModalEl = document.getElementById('videoModal');
+    const videoForm = document.getElementById('videoForm');
+
+    const stateKey = 'cvfish_state';
+    function loadState() {
+      try { return JSON.parse(localStorage.getItem(stateKey) || '{}'); }
+      catch { return {}; }
+    }
+    function saveState() {
+      localStorage.setItem(stateKey, JSON.stringify({
+        selectedMetric,
+        chartView: chartView.value,
+        logView: logView.value,
+        currentPage,
+        rangeStart: rangeStart ? rangeStart.toISOString() : null,
+        rangeEnd: rangeEnd ? rangeEnd.toISOString() : null,
+        logRangeStart: logRangeStart ? logRangeStart.toISOString() : null,
+        logRangeEnd: logRangeEnd ? logRangeEnd.toISOString() : null,
+        colors
+      }));
+    }
+    const saved = loadState();
+    if (saved.colors) { Object.assign(colors, saved.colors); }
+    selectedMetric = saved.selectedMetric || null;
+    chartView.value = saved.chartView || 'all';
+    logView.value = saved.logView || 'all';
+    currentPage = saved.currentPage || 1;
+    rangeStart = saved.rangeStart ? new Date(saved.rangeStart) : null;
+    rangeEnd = saved.rangeEnd ? new Date(saved.rangeEnd) : null;
+    logRangeStart = saved.logRangeStart ? new Date(saved.logRangeStart) : null;
+    logRangeEnd = saved.logRangeEnd ? new Date(saved.logRangeEnd) : null;
+    if (rangeStart) startInput.value = formatInput(rangeStart);
+    if (rangeEnd) endInput.value = formatInput(rangeEnd);
+
+    applyColors();
+
+    function formatTs(d) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+
+    function formatInput(d) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
 
     metricSelect.addEventListener('change', () => {
       selectedMetric = metricSelect.value;
+      saveState();
       fetchMetrics();
     });
 
     async function fetchMetrics() {
-      const res = await fetch('/metrics');
+      if (fileMode) return;
+      let url = '/metrics';
+      const params = new URLSearchParams();
+      if (rangeStart) params.append('start', formatTs(rangeStart));
+      if (rangeEnd) params.append('end', formatTs(rangeEnd));
+      if ([...params].length) url += `?${params.toString()}`;
+      const res = await fetch(url);
       const json = await res.json();
       const rows = json.metrics;
       const unique = Array.from(new Set(rows.map(r => `${r.pair}_${r.metric_name}`)));
@@ -82,18 +297,19 @@
           metricSelect.appendChild(opt);
         });
         metricSelect.value = selectedMetric;
+        saveState();
       }
       const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
       if (filtered.length) {
         const label = selectedMetric.replace('_', ' ');
-        data.labels = filtered.map(r => r.time);
+        chart.data.labels = filtered.map(r => r.time);
         const values = filtered.map(r => parseFloat(r.magnitude_mean));
         const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
-        data.datasets[0].label = label;
+        chart.data.datasets[0].label = label;
         chart.options.plugins.title.text = label;
-        data.datasets[0].data = values;
-        data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
-        data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[1].data = values.map((v, i) => v + numStd * stds[i]);
+        chart.data.datasets[2].data = values.map((v, i) => v - numStd * stds[i]);
         chart.update();
       }
       await preloadFrames();
@@ -111,7 +327,7 @@
       if (!res.ok) return;
       const json = await res.json();
       for (const set of json.frame_sets) {
-        if (!data.labels.includes(set.timestamp)) continue;
+        if (!chart.data.labels.includes(set.timestamp)) continue;
         const needed = set.frames.filter(f => f.index !== 1).length;
         const cached = frameCache[set.timestamp]?.length || 0;
         if (cached === needed) continue;
@@ -129,18 +345,220 @@
       }
     }
 
+    function renderLogs() {
+      logContainer.innerHTML = '';
+      const start = (currentPage - 1) * logsPerPage;
+      const pageLogs = logs.slice(start, start + logsPerPage);
+      pageLogs.forEach(log => {
+        const div = document.createElement('div');
+        let cls = 'alert alert-secondary';
+        if (log.level === 'error') cls = 'alert alert-danger';
+        else if (log.level === 'success') cls = 'alert alert-success';
+        div.className = cls;
+        div.textContent = `${log.timestamp}: ${log.message}`;
+        logContainer.appendChild(div);
+      });
+      prevLogs.disabled = currentPage === 1;
+      nextLogs.disabled = start + logsPerPage >= logs.length;
+    }
+
+    prevLogs.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderLogs();
+        saveState();
+      }
+    });
+
+    nextLogs.addEventListener('click', () => {
+      if (currentPage * logsPerPage < logs.length) {
+        currentPage++;
+        renderLogs();
+        saveState();
+      }
+    });
+
     async function fetchLogs() {
-      const res = await fetch('/logs');
+      let url = '/logs';
+      const params = new URLSearchParams();
+      if (logRangeStart) params.append('start', formatTs(logRangeStart));
+      if (logRangeEnd) params.append('end', formatTs(logRangeEnd));
+      if ([...params].length) url += `?${params.toString()}`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
-      errorList.innerHTML = '';
-      json.logs.filter(l => l.level === 'error').forEach(log => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item';
-        li.textContent = `${log.timestamp}: ${log.message}`;
-        errorList.appendChild(li);
+      logs = json.logs;
+      const totalPages = Math.max(1, Math.ceil(logs.length / logsPerPage));
+      if (currentPage > totalPages) currentPage = totalPages;
+      renderLogs();
+      saveState();
+    }
+
+    applyRange.addEventListener('click', (e) => {
+      e.preventDefault();
+      rangeStart = startInput.value ? new Date(startInput.value) : null;
+      rangeEnd = endInput.value ? new Date(endInput.value) : null;
+      saveState();
+      fetchMetrics();
+    });
+
+    chartView.addEventListener('change', () => {
+      const now = new Date();
+      if (chartView.value === 'daily') {
+        rangeStart = new Date(now.getTime() - 24*60*60*1000);
+        rangeEnd = now;
+        startInput.value = formatInput(rangeStart);
+        endInput.value = formatInput(rangeEnd);
+      } else if (chartView.value === 'weekly') {
+        rangeStart = new Date(now.getTime() - 7*24*60*60*1000);
+        rangeEnd = now;
+        startInput.value = formatInput(rangeStart);
+        endInput.value = formatInput(rangeEnd);
+      } else {
+        rangeStart = null;
+        rangeEnd = null;
+        startInput.value = '';
+        endInput.value = '';
+      }
+      saveState();
+      fetchMetrics();
+    });
+
+    logView.addEventListener('change', () => {
+      const now = new Date();
+      if (logView.value === 'daily') {
+        logRangeStart = new Date(now.getTime() - 24*60*60*1000);
+        logRangeEnd = now;
+      } else if (logView.value === 'weekly') {
+        logRangeStart = new Date(now.getTime() - 7*24*60*60*1000);
+        logRangeEnd = now;
+      } else {
+        logRangeStart = null;
+        logRangeEnd = null;
+      }
+      saveState();
+      fetchLogs();
+    });
+
+    function renderConfig(parent, obj, path='') {
+      Object.entries(obj).forEach(([key, val]) => {
+        const full = path ? `${path}.${key}` : key;
+        if (val && typeof val === 'object') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mb-2';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-sm btn-secondary';
+          btn.textContent = `+ ${key}`;
+          const child = document.createElement('div');
+          child.className = 'ms-3 d-none';
+          btn.addEventListener('click', () => child.classList.toggle('d-none'));
+          wrapper.appendChild(btn);
+          wrapper.appendChild(child);
+          parent.appendChild(wrapper);
+          renderConfig(child, val, full);
+        } else {
+          const div = document.createElement('div');
+          div.className = 'mb-3';
+          const label = document.createElement('label');
+          label.className = 'form-label';
+          label.textContent = full;
+          const input = document.createElement('input');
+          input.className = 'form-control';
+          input.name = full;
+          input.value = val;
+          div.appendChild(label);
+          div.appendChild(input);
+          parent.appendChild(div);
+        }
       });
     }
+
+    configBtn.addEventListener('click', async () => {
+      const res = await fetch('/config');
+      const json = await res.json();
+      const body = configForm.querySelector('.modal-body');
+      body.innerHTML = '';
+      renderConfig(body, json.config);
+      new bootstrap.Modal(configModalEl).show();
+    });
+
+    configForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {};
+      new FormData(configForm).forEach((v, k) => {
+        k.split('.').reduce((acc, part, i, arr) => {
+          if (i === arr.length - 1) acc[part] = v;
+          else acc[part] = acc[part] || {};
+          return acc[part];
+        }, data);
+      });
+      await fetch('/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      bootstrap.Modal.getInstance(configModalEl).hide();
+      saveState();
+      location.reload();
+    });
+
+    paletteBtn.addEventListener('click', () => {
+      colorForm.bgColor.value = colors.background;
+      colorForm.dotsColor.value = colors.dots;
+      colorForm.lineColor.value = colors.line;
+      colorForm.bandColor.value = colors.band;
+      new bootstrap.Modal(paletteModalEl).show();
+    });
+
+    colorForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      colors.background = colorForm.bgColor.value;
+      colors.dots = colorForm.dotsColor.value;
+      colors.line = colorForm.lineColor.value;
+      colors.band = colorForm.bandColor.value;
+      applyColors();
+      saveState();
+      bootstrap.Modal.getInstance(paletteModalEl).hide();
+    });
+
+    videoBtn.addEventListener('click', () => {
+      videoForm.reset();
+      new bootstrap.Modal(videoModalEl).show();
+    });
+
+    videoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(videoForm);
+      const res = await fetch('/analyze', {method: 'POST', body: fd});
+      if (!res.ok) return;
+      const json = await res.json();
+      const rows = json.metrics || [];
+      fileMode = true;
+      metricSelect.innerHTML = '';
+      const unique = [...new Set(rows.map(r => `${r.pair}_${r.metric_name}`))];
+      unique.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name.replace('_', ' ');
+        metricSelect.appendChild(opt);
+      });
+      selectedMetric = unique[0] || null;
+      if (selectedMetric) {
+        const filtered = rows.filter(r => `${r.pair}_${r.metric_name}` === selectedMetric);
+        const label = selectedMetric.replace('_', ' ');
+        chart.data.labels = filtered.map(r => r.time);
+        const values = filtered.map(r => parseFloat(r.magnitude_mean));
+        const stds = filtered.map(r => parseFloat(r.magnitude_deviation));
+        chart.data.datasets[0].label = label;
+        chart.options.plugins.title.text = label;
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[1].data = values.map((v,i) => v + numStd * stds[i]);
+        chart.data.datasets[2].data = values.map((v,i) => v - numStd * stds[i]);
+        chart.update();
+      }
+      bootstrap.Modal.getInstance(videoModalEl).hide();
+    });
 
     function showFrames(ts) {
       const frames = frameCache[ts];
@@ -151,7 +569,7 @@
         img.src = f.url;
         img.alt = f.filename;
         img.title = f.filename;
-        img.className = 'img-fluid mb-2';
+        img.className = 'me-2';
         frameWindow.appendChild(img);
       });
     }
@@ -160,7 +578,7 @@
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (points.length) {
         const idx = points[0].index;
-        const ts = data.labels[idx];
+        const ts = chart.data.labels[idx];
         if (hoverTs === ts) return;
         hoverTs = ts;
         showFrames(ts);
@@ -187,8 +605,18 @@
       const points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
       if (!points.length) return;
       const idx = points[0].index;
-      pinnedTs = data.labels[idx];
-      showFrames(pinnedTs);
+      const ts = chart.data.labels[idx];
+      if (pinnedTs === ts) {
+        pinnedTs = null;
+        if (hoverTs) {
+          showFrames(hoverTs);
+        } else {
+          frameWindow.innerHTML = '';
+        }
+      } else {
+        pinnedTs = ts;
+        showFrames(pinnedTs);
+      }
     });
 
     fetchMetrics();
